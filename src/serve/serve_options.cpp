@@ -79,6 +79,7 @@ std::string serve_usage_text(const char* argv0) {
            "[--request-log-jsonl FILE] "
            "[--response-store-max-records N] [--response-store-max-mib N] "
            "[--kv-dtype bf16|int8|fp8|nvfp4|k8v4] [--spec mtp|dflash --draft-tokens N] "
+           "[--rope-yarn-factor F] [--rope-original-max-position N] "
            "[--default-max-tokens N] [--default-thinking-budget N] "
            "[--vision] [--no-cuda-graph] [--no-prefix-reuse] "
            "[--lm-head-draft] [--no-thinking] [--preserve-thinking] [--cors] "
@@ -259,6 +260,18 @@ ServeOptions parse_serve_options(int argc, char** argv) {
             options.response_store_max_bytes = static_cast<std::size_t>(mib << 20);
         } else if (arg == "--device") {
             options.device = parse_nonnegative_int(require_value("--device"), "device");
+        } else if (arg == "--rope-yarn-factor") {
+            options.rope_yarn_factor = std::stof(require_value("--rope-yarn-factor"));
+            if (!(options.rope_yarn_factor >= 1.0F) || options.rope_yarn_factor > 8.0F) {
+                throw std::invalid_argument(
+                    "--rope-yarn-factor must be in [1,8] (1 disables YaRN)");
+            }
+        } else if (arg == "--rope-original-max-position") {
+            options.rope_original_max_position = static_cast<std::uint32_t>(
+                std::stoul(require_value("--rope-original-max-position")));
+            if (options.rope_original_max_position == 0) {
+                throw std::invalid_argument("--rope-original-max-position must be positive");
+            }
         } else if (arg == "--kv-dtype") {
             options.kv_cache = parse_kv_dtype(require_value("--kv-dtype"));
         } else if (arg == "--spec") {

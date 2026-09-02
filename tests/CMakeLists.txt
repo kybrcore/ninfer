@@ -52,6 +52,9 @@ function(ninfer_add_fused_linear_test name source common)
 endfunction()
 
 # Artifact framing and model-independent runtime contracts.
+ninfer_add_test(ninfer_yarn_test
+  SOURCES test_yarn.cpp
+  LIBRARIES ninfer_ops)
 ninfer_add_test(ninfer_artifact_reader_test
   SOURCES test_ninfer_artifact_reader.cpp
   LIBRARIES ninfer_artifact)

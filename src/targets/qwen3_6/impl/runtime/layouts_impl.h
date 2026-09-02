@@ -570,8 +570,18 @@ WorkspacePlan build_workspace_plan(const SequencePlanImpl& plan) {
 }
 
 void validate_target_options(DeviceContext& device, const EngineOptions& options) {
-    if (options.max_context == 0 || options.max_context > Variant::maximum_context) {
-        throw std::invalid_argument("max_context exceeds the variant native context capacity");
+    // Variant::maximum_context stays the model's true native window. YaRN only raises
+    // the ceiling the engine will ACCEPT, to native x factor; a factor of 1 leaves the
+    // check exactly as upstream ships it.
+    const double yarn_factor = options.rope_yarn_factor > 1.0F
+                                   ? static_cast<double>(options.rope_yarn_factor)
+                                   : 1.0;
+    const auto context_ceiling = static_cast<std::uint64_t>(
+        static_cast<double>(Variant::maximum_context) * yarn_factor);
+    if (options.max_context == 0 || options.max_context > context_ceiling) {
+        throw std::invalid_argument(
+            "max_context exceeds the variant native context capacity"
+            " (raise --rope-yarn-factor to extend it)");
     }
     if (options.prefill_chunk == 0 || options.prefill_chunk % kPrefillChunkAlignment != 0) {
         throw std::invalid_argument("prefill_chunk must be a nonzero multiple of 128");
