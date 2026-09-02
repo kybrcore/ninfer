@@ -578,6 +578,11 @@ void validate_target_options(DeviceContext& device, const EngineOptions& options
                                    : 1.0;
     const auto context_ceiling = static_cast<std::uint64_t>(
         static_cast<double>(Variant::maximum_context) * yarn_factor);
+    if (context_ceiling > ops::kCausalAttentionMaximumVisibleKeys) {
+        throw std::invalid_argument(
+            "rope_yarn_factor extends the context past the attention visible-keys ceiling"
+            " (native context x 4 is the supported maximum)");
+    }
     if (options.max_context == 0 || options.max_context > context_ceiling) {
         throw std::invalid_argument(
             "max_context exceeds the variant native context capacity"
