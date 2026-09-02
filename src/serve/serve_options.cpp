@@ -262,9 +262,10 @@ ServeOptions parse_serve_options(int argc, char** argv) {
             options.device = parse_nonnegative_int(require_value("--device"), "device");
         } else if (arg == "--rope-yarn-factor") {
             options.rope_yarn_factor = std::stof(require_value("--rope-yarn-factor"));
-            if (!(options.rope_yarn_factor >= 1.0F) || options.rope_yarn_factor > 8.0F) {
+            if (!(options.rope_yarn_factor >= 1.0F) || options.rope_yarn_factor > 4.0F) {
                 throw std::invalid_argument(
-                    "--rope-yarn-factor must be in [1,8] (1 disables YaRN)");
+                    "--rope-yarn-factor must be in [1,4] (1 disables YaRN; 4 is the attention "
+                    "visible-keys ceiling)");
             }
         } else if (arg == "--rope-original-max-position") {
             options.rope_original_max_position = static_cast<std::uint32_t>(
