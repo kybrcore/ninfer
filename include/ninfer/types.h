@@ -156,6 +156,10 @@ struct EngineOptions {
     std::uint32_t pending_timeout_ms   = 30000;
     std::uint32_t prefill_chunk        = 1024;
     KvCacheStorage kv_cache            = KvCacheStorage::BFloat16;
+    // YaRN RoPE extension factor. 1.0 = disabled and leaves every compiled-in RoPE
+    // constant untouched. Above 1 it raises the addressable context ceiling to
+    // factor x the variant native window; the serve layer installs the tables.
+    float rope_yarn_factor             = 1.0F;
     SpeculativeOptions speculative;
     std::size_t media_cache_bytes = kDefaultMediaCacheBytes;
     std::size_t media_live_bytes  = kDefaultMediaLiveBytes;

@@ -1,3 +1,5 @@
+#include "ops/kernel/yarn.h"
+#include "ops/launcher/rope.h"
 #include "serve/generation_service.h"
 
 #include "product/media_acquire/acquire.h"
@@ -242,6 +244,7 @@ GenerationService::GenerationService(ServeOptions options, StartupObserver start
     engine_options.pending_timeout_ms       = options_.pending_timeout_ms;
     engine_options.prefill_chunk            = options_.prefill_chunk;
     engine_options.kv_cache                 = options_.kv_cache;
+    engine_options.rope_yarn_factor         = options_.rope_yarn_factor;
     engine_options.enable_vision            = options_.enable_vision;
     engine_options.use_cuda_graph           = options_.use_cuda_graph;
     engine_options.speculative              = options_.speculative;
@@ -252,6 +255,16 @@ GenerationService::GenerationService(ServeOptions options, StartupObserver start
     engine_options.media_preprocess_threads = options_.media_preprocess_threads;
     engine_options.startup_observer         = std::move(startup_observer);
     engine_              = std::make_unique<ninfer::Engine>(std::move(engine_options));
+    if (options_.rope_yarn_factor > 1.0F) {
+        ninfer::rope::YarnParams yarn;
+        yarn.factor                = options_.rope_yarn_factor;
+        yarn.original_max_position = static_cast<int>(options_.rope_original_max_position);
+        const auto freqs = ninfer::rope::yarn_inv_freq(yarn, yarn.rotary_dim);
+        ninfer::ops::detail::rope_install_text_inv_frequency(
+            freqs.data(), static_cast<int>(freqs.size()));
+        ninfer::ops::detail::rope_install_text_attention_scale(
+            ninfer::rope::yarn_attention_scale(yarn));
+    }
     prompt_capabilities_ = engine_->prompt_capabilities();
     request_capacity_    = std::make_shared<RequestCapacity>(
         static_cast<std::size_t>(options_.max_concurrency) + options_.max_pending_requests);

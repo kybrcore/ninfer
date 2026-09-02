@@ -43,6 +43,10 @@ struct ServeOptions {
     std::size_t response_store_max_bytes   = kDefaultResponseStoreBytes;
     int device                             = 0;
     KvCacheStorage kv_cache                = KvCacheStorage::BFloat16;
+    // YaRN RoPE extension. factor <= 1 is DISABLED and must stay bit-identical to the
+    // unmodified engine: the fixed-frequency path is bypassed only when factor > 1.
+    float rope_yarn_factor                 = 1.0F;
+    std::uint32_t rope_original_max_position = 262144;
     SpeculativeOptions speculative;
     ContextCacheOptions context_cache;
     bool enable_vision      = false;
