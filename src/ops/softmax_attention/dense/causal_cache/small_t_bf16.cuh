@@ -37,7 +37,6 @@ __launch_bounds__(128, 2) __global__ void causal_attention_small_t_tc_partial_bf
     constexpr int PVNt    = D / 8;
     constexpr int PVKs    = Bc / 16;
     // The 262144-key maximum envelope spans at most 49 pages in this split geometry.
-    constexpr int PageIds       = 64;
     constexpr float Log2E       = 1.4426950408889634074f;
     constexpr unsigned FullMask = 0xffffffffu;
     constexpr int QkvRows       = 2 * Bc;
@@ -46,7 +45,6 @@ __launch_bounds__(128, 2) __global__ void causal_attention_small_t_tc_partial_bf
 
     __shared__ __align__(16) __nv_bfloat16 qkv_s[QkvRows * D];
     __shared__ __align__(16) __half p_s[Wc * 16 * Bc];
-    __shared__ std::int32_t physical_pages_s[PageIds];
     __nv_bfloat16* k_s = qkv_s;
     __half* v_s        = reinterpret_cast<__half*>(qkv_s + Bc * D);
 
@@ -140,11 +138,6 @@ __launch_bounds__(128, 2) __global__ void causal_attention_small_t_tc_partial_bf
     }
     const int first_tile = (split_start / Bc) * Bc;
     const int key_blocks = div_up(split_end - first_tile, Bc);
-    const int first_page = first_tile >> kPagedKVPageShift;
-    const int page_count = ((split_end - 1) >> kPagedKVPageShift) - first_page + 1;
-    for (int page = tid; page < page_count; page += Threads) {
-        physical_pages_s[page] = block_table[first_page + page];
-    }
 
     if constexpr (CacheInput::writes_cache) {
         // The owning split writes each new row. K is copied exactly and V is rounded once to FP16.
@@ -205,7 +198,7 @@ __launch_bounds__(128, 2) __global__ void causal_attention_small_t_tc_partial_bf
                     smem_addr(&qkv_s[arow * D + causal_small_t_tc_swz(arow, acol)]));
     }
     __syncthreads();
-    int physical_page = physical_pages_s[0];
+    int physical_page = block_table[first_tile >> kPagedKVPageShift];
     float acc[PVNt][4];
 #pragma unroll
     for (int n = 0; n < PVNt; ++n) {
@@ -217,7 +210,7 @@ __launch_bounds__(128, 2) __global__ void causal_attention_small_t_tc_partial_bf
     for (int kb = 0; kb < key_blocks; ++kb) {
         const int k0 = first_tile + kb * Bc;
         if (kb != 0 && (k0 & kPagedKVPageMask) == 0) {
-            physical_page = physical_pages_s[(k0 >> kPagedKVPageShift) - first_page];
+            physical_page = block_table[k0 >> kPagedKVPageShift];
         }
         // Stage BF16 K and persistent FP16 V with one cp.async wave (16B/thread, high MLP).
         // Current-step K comes from input and V from the row converted above; tail slots are
