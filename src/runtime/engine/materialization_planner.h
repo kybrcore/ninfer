@@ -17,6 +17,23 @@
 
 namespace ninfer::runtime {
 
+// Ceiling on the materialization search. This is a GUARD against pathological search, not the
+// governor: it must stay well above the proportional term for any incumbent worth improving.
+//
+// It was 5 ms, which made it the governor for every incumbent above 100 ms - i.e. every real
+// request. A 144k-token root re-prefill costs ~80 s, so the proportional term is ~4 s and the
+// search was allotted 5 ms, 0.006% of the prize. Measured consequence before this change:
+// stop_reason=time_budget on 439 of 444 requests, targets_evaluated falling 45 -> 14 as the
+// prompt grew, and prefix reuse decaying from 98.5% on small turns to 13.6% at 188k tokens.
+// A completed search needs ~9 ms at that size, so the old ceiling cut it off just short.
+inline constexpr std::uint64_t kMaterializationSearchCeilingNs = 250'000'000ULL;
+
+// Budget the search at 5% of what the incumbent would otherwise cost, bounded by the ceiling.
+[[nodiscard]] inline constexpr std::uint64_t
+materialization_search_budget_ns(std::uint64_t incumbent_total_ns) noexcept {
+    return std::min<std::uint64_t>(kMaterializationSearchCeilingNs, incumbent_total_ns / 20U);
+}
+
 struct MaterializationCheckpointPolicy {
     PlanningOwnerId owner;
     CheckpointRef checkpoint;
@@ -255,7 +272,7 @@ public:
 
         const Clock::time_point search_started = Clock::now();
         const std::uint64_t search_budget_ns =
-            std::min<std::uint64_t>(5'000'000ULL, incumbent.cost.total_ns / 20U);
+            materialization_search_budget_ns(incumbent.cost.total_ns);
         const std::uint64_t guided_watchdog_ns = search_budget_ns;
         std::uint64_t maximum_step_ns          = 0;
         std::uint32_t optional_targets         = 0;
