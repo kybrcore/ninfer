@@ -15,10 +15,29 @@ NInfer supports five artifact identities. The quick-start commands use Qwen3.8-2
 | Qwen3.6-27B | `nvfp4` | `qwen3_6_27b_nvfp4.ninfer` | [Qwen3.6-27B NVFP4](https://huggingface.co/neroued/Qwen3.6-27B-nvfp4-NInfer) |
 | Qwen3.8-27B | `groupwise-int` | `qwen3_8_27b.ninfer` | [Qwen3.8-27B](https://huggingface.co/neroued/Qwen3.8-27B-NInfer) |
 | Qwen3.8-27B | `nvfp4` | `qwen3_8_27b_nvfp4.ninfer` | [Qwen3.8-27B NVFP4](https://huggingface.co/neroued/Qwen3.8-27B-nvfp4-NInfer) |
+| Qwen3.8-27B | `nvfp4-quasar` | `qwen3_8_27b_nvfp4_quasar.ninfer` | [MirkoCovizzi/Qwen3.8-27B-QUASAR-NVFP4-NInfer](https://huggingface.co/MirkoCovizzi/Qwen3.8-27B-QUASAR-NVFP4-NInfer) |
 | Qwen3.6-35B-A3B | `groupwise-int` | `qwen3_6_35b_a3b.ninfer` | [Qwen3.6-35B-A3B](https://huggingface.co/neroued/Qwen3.6-35B-A3B-NInfer) |
 
 The artifact identity fixes the exact model and weight profile. Every artifact also embeds the
 tokenizer, chat template, and media frontend resources required by its registered target.
+
+## Branch Lineage & Acknowledgments (`feat/mirko-covizzi-quasar-nvfp4`)
+
+This branch maintains community contributions rebased on top of the canonical upstream `Neroued/ninfer` master:
+
+1. **Upstream Core Engine**:
+   - Upstream repository: [Neroued/ninfer](https://github.com/Neroued/ninfer)
+   - Author: [@Neroued](https://github.com/Neroued)
+   - Sincere gratitude to Neroued for architecting and developing NInfer — an extraordinarily fast, specialized single-GPU C++/CUDA inference engine for RTX 5090 with zero-overhead hierarchical context caching and MTP speculative decoding.
+
+2. **Qwen3.8 QUASAR NVFP4 Integration**:
+   - Contributor repository: [MirkoCovizzi/ninfer-rtx5090-mobile](https://github.com/MirkoCovizzi/ninfer-rtx5090-mobile) (`feat/quasar-nvfp4-converter`)
+   - Author: [@MirkoCovizzi](https://github.com/MirkoCovizzi)
+   - Sincere gratitude to Mirko Covizzi for introducing support for `Qwen38Nvfp4Quasar`, enabling Qwen3.8 QUASAR QAT model conversion to NInfer artifacts (with dequantized narrow GDN control layers), reducing static model VRAM footprint from 21.5 GiB down to 16.35 GiB (saving ~5.15 GiB VRAM), and unlocking MTP=3 speculative decoding for QUASAR weights.
+
+3. **Branch Maintenance**:
+   - Rebased onto the latest `Neroued/ninfer:master` commits.
+   - Preserves CUDA 13.0 build gate compatibility (`VERSION_LESS 13.0` in `CMakeLists.txt`) for AutoDL / RTX 5090 container environments.
 
 ## Quick start
 
