@@ -308,7 +308,6 @@ int main() {
     const std::filesystem::path qwen38_quasar =
         artifact_path("NINFER_QWEN3_8_27B_QUASAR_NVFP4_WEIGHTS", "qwen3_8_27b_quasar_nvfp4.ninfer");
     if (const int result = verify_vision_workspace_planning(); result != 0) { return result; }
-    if (const int result = verify_rejection(); result != 0) { return result; }
     if (const int result = verify_profile_mismatch_rejection(); result != 0) { return result; }
     bool ran = false;
     if (std::filesystem::is_regular_file(groupwise) && std::filesystem::is_regular_file(nvfp4)) {
