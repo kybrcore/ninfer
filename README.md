@@ -21,9 +21,9 @@ NInfer supports five artifact identities. The quick-start commands use Qwen3.8-2
 The artifact identity fixes the exact model and weight profile. Every artifact also embeds the
 tokenizer, chat template, and media frontend resources required by its registered target.
 
-## Branch Lineage & Acknowledgments (`feat/mirko-covizzi-quasar-nvfp4`)
+## Branch Lineage & Acknowledgments (`feat/mirko-covizzi-quasar-nvfp4-yarn`)
 
-This branch maintains community contributions rebased on top of the canonical upstream `Neroued/ninfer` master:
+This branch maintains community contributions on top of `feat/mirko-covizzi-quasar-nvfp4`:
 
 1. **Upstream Core Engine**:
    - Upstream repository: [Neroued/ninfer](https://github.com/Neroued/ninfer)
@@ -35,9 +35,15 @@ This branch maintains community contributions rebased on top of the canonical up
    - Author: [@MirkoCovizzi](https://github.com/MirkoCovizzi)
    - Sincere gratitude to Mirko Covizzi for introducing support for `Qwen38Nvfp4Quasar`, enabling Qwen3.8 QUASAR QAT model conversion to NInfer artifacts (with dequantized narrow GDN control layers), reducing static model VRAM footprint from 21.5 GiB down to 16.35 GiB (saving ~5.15 GiB VRAM), and unlocking MTP=3 speculative decoding for QUASAR weights.
 
-3. **Branch Maintenance**:
-   - Rebased onto the latest `Neroued/ninfer:master` commits.
-   - Preserves CUDA 13.0 build gate compatibility (`VERSION_LESS 13.0` in `CMakeLists.txt`) for AutoDL / RTX 5090 container environments.
+3. **YaRN Context Extension & Attention Visible-Keys Ceiling**:
+   - Contributor repository: [splickz/ninfer-yarn-nvfp4](https://github.com/splickz/ninfer-yarn-nvfp4)
+   - Author: [@splickz](https://github.com/splickz)
+   - Sincere gratitude to splickz for implementing dynamic YaRN (Yet another RoPE extensioN) frequency interpolation and attention temperature scaling (`--rope-yarn-factor`), directly reading the block table in decode attention to eliminate fixed physical page buffer limits, and raising the visible-keys ceiling to 1,048,576 tokens (4x native context).
+
+4. **Branch Maintenance & Validation**:
+   - Maintained by [kybrcore](https://github.com/kybrcore).
+   - Rebased cleanly on top of `feat/mirko-covizzi-quasar-nvfp4`.
+   - Verified 100% needle-in-a-haystack retrieval up to 500K context tokens on NVIDIA GeForce RTX 5090 (32 GB) with `--rope-yarn-factor 2.0 --max-context 524288`.
 
 ## Quick start
 
