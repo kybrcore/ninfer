@@ -20,6 +20,29 @@ NInfer supports five artifact identities. The quick-start commands use Qwen3.8-2
 The artifact identity fixes the exact model and weight profile. Every artifact also embeds the
 tokenizer, chat template, and media frontend resources required by its registered target.
 
+## Branch Lineage & Acknowledgments (`mobile-quasar-yarn`)
+
+This branch maintains community contributions on top of `mobile-quasar`:
+
+1. **Upstream Core Engine**:
+   - Upstream repository: [Neroued/ninfer](https://github.com/Neroued/ninfer)
+   - Author: [@Neroued](https://github.com/Neroued)
+   - Sincere gratitude to Neroued for architecting and developing NInfer — an extraordinarily fast, specialized single-GPU C++/CUDA inference engine for RTX 5090 with zero-overhead hierarchical context caching and MTP speculative decoding.
+
+2. **Qwen3.8 QUASAR NVFP4 Integration**:
+   - Contributor repository: [MirkoCovizzi/ninfer-rtx5090-mobile](https://github.com/MirkoCovizzi/ninfer-rtx5090-mobile) (`feat/quasar-nvfp4-converter`)
+   - Author: [@MirkoCovizzi](https://github.com/MirkoCovizzi)
+   - Sincere gratitude to Mirko Covizzi for introducing support for `Qwen38Nvfp4Quasar`, enabling Qwen3.8 QUASAR QAT model conversion to NInfer artifacts (with dequantized narrow GDN control layers), reducing static model VRAM footprint from 21.5 GiB down to 16.35 GiB (saving ~5.15 GiB VRAM), unlocking MTP=3 speculative decoding, and bundling DFlash2 speculative decoding for QUASAR weights.
+
+3. **YaRN Context Extension & Attention Visible-Keys Ceiling**:
+   - Contributor repository: [splickz/ninfer-yarn-nvfp4](https://github.com/splickz/ninfer-yarn-nvfp4)
+   - Author: [@splickz](https://github.com/splickz)
+   - Sincere gratitude to splickz for implementing dynamic YaRN (Yet another RoPE extensioN) frequency interpolation and attention temperature scaling (`--rope-yarn-factor`), directly reading the block table in decode attention to eliminate fixed physical page buffer limits, and raising the visible-keys ceiling to 1,048,576 tokens (4x native context).
+
+4. **Branch Maintenance & Validation**:
+   - Maintained by [kybrcore](https://github.com/kybrcore).
+   - Integrated on top of `mobile-quasar` (MirkoCovizzi mobile lineage + upstream master).
+   - Verified 100% needle-in-a-haystack retrieval up to 500K context tokens on NVIDIA GeForce RTX 5090 (32 GB) with `--rope-yarn-factor 2.0 --max-context 524288`.
 ## Quick start
 
 NInfer requires 64-bit Linux, an NVIDIA GeForce RTX 5090, CUDA Toolkit 13.1 or newer, CMake 3.28 or
