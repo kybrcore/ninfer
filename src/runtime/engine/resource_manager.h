@@ -37,6 +37,10 @@ struct RetentionObservation {
     RetentionClass retention_class   = RetentionClass::RecentPrivate;
     std::uint64_t selected_hit_count = 0;
     std::uint64_t last_hit_epoch     = 0;
+    // Set once an incoming prompt carried a shortlist key AT this checkpoint's frontier and the
+    // digests disagreed: the lineage has diverged here, so no future prompt on it can reuse this
+    // checkpoint.  Positive evidence of unreachability, not the absence of demand.
+    bool diverged = false;
 };
 
 struct PolicyObservationKey {
@@ -322,6 +326,13 @@ public:
                 if (!valid_prefix_index_entry(index)) { continue; }
                 const std::optional<PrefixShortlistKey> incoming =
                     base.prefix_shortlist_key(index.key.frontier);
+                if (incoming && *incoming != index.key && !index.shared &&
+                    index.slot < catalog_count_) {
+                    if (RetentionObservation* observation = find_observation(
+                            catalog_[index.slot].observations, index.checkpoint)) {
+                        observation->diverged = true;
+                    }
+                }
                 if (!incoming || *incoming != index.key) { continue; }
 
                 if (!index.shared) {
@@ -2001,6 +2012,7 @@ private:
                         .baseline_recovery_ns = price_checkpoint_recovery_work(
                             cost_model_,
                             program.checkpoint_recovery_work(*entry.handle, checkpoint.ref)),
+                        .unreachable = observation->diverged,
                     });
                 };
                 if (entry.summary.endpoint) { append_checkpoint(*entry.summary.endpoint); }

@@ -1829,6 +1829,71 @@ void test_private_portfolio_loss_keeps_checkpoint_identity_fixed() {
             "a surviving endpoint masked loss of an earlier private checkpoint");
 }
 
+// A checkpoint the lineage has provably diverged from cannot be reused by any future prompt on
+// it, so retaining it saves nothing and dropping it must cost nothing.  Pricing it at its full
+// rebuild value made a high-reuse plan that drops it look ~7s more expensive than a low-reuse
+// plan that keeps it, which is how a saturated cache stayed anchored to an old frontier.
+void test_unreachable_checkpoint_contributes_no_transition_loss() {
+    using ninfer::runtime::ContextPortfolioCheckpointValue;
+    using ninfer::runtime::ContextPortfolioOwnerPolicy;
+    using ninfer::runtime::ContextPortfolioValue;
+
+    const std::array owners{
+        ContextPortfolioOwnerPolicy{.owner                    = PlanningOwnerId{.value = 0},
+                                    .private_retention_weight = 4},
+    };
+    const std::array reachable{
+        ContextPortfolioCheckpointValue{
+            .owner                = PlanningOwnerId{.value = 0},
+            .rebuild_ns           = 1000,
+            .baseline_recovery_ns = 100,
+            .target_recovery_ns   = 1000,
+        },
+    };
+    const std::array unreachable{
+        ContextPortfolioCheckpointValue{
+            .owner                = PlanningOwnerId{.value = 0},
+            .rebuild_ns           = 1000,
+            .baseline_recovery_ns = 100,
+            .target_recovery_ns   = 1000,
+            .unreachable          = true,
+        },
+    };
+    ContextPortfolioValue value;
+    require(value.fold(owners, reachable).private_transition_loss == 3600,
+            "a reachable dropped checkpoint stopped costing its retained value");
+    require(value.fold(owners, unreachable).private_transition_loss == 0,
+            "dropping a provably unreachable checkpoint was still charged as a loss");
+}
+
+// The same evidence retires its public value: demand recorded against a frontier the lineage has
+// diverged from can never be served from that checkpoint either.
+void test_unreachable_checkpoint_contributes_no_public_value() {
+    using ninfer::runtime::ContextPortfolioCheckpointValue;
+    using ninfer::runtime::ContextPortfolioOwnerPolicy;
+    using ninfer::runtime::ContextPortfolioValue;
+
+    const std::array owners{
+        ContextPortfolioOwnerPolicy{.owner                    = PlanningOwnerId{.value = 0},
+                                    .private_retention_weight = 4},
+    };
+    const std::array checkpoints{
+        ContextPortfolioCheckpointValue{
+            .owner                = PlanningOwnerId{.value = 0},
+            .demand_mask          = 0b11,
+            .rebuild_ns           = 1000,
+            .baseline_recovery_ns = 100,
+            .target_recovery_ns   = 100,
+            .unreachable          = true,
+        },
+    };
+    ContextPortfolioValue value;
+    const auto result = value.fold(owners, checkpoints);
+    require(result.baseline_public_value == 0 && result.target_public_value == 0 &&
+                result.private_transition_loss == 0 && !result.saturated,
+            "an unreachable checkpoint still carried public value for its recorded demand");
+}
+
 void test_portfolio_demand_and_owner_aggregation() {
     using ninfer::runtime::ContextPortfolioCheckpointValue;
     using ninfer::runtime::ContextPortfolioOwnerPolicy;
@@ -3427,6 +3492,10 @@ int main() {
              test_shared_capture_combines_two_pressure_owners);
     run_test("aborted shared capture logical rollback",
              test_aborted_shared_capture_start_rolls_back_logical_claims);
+    run_test("unreachable checkpoint costs no transition loss",
+             test_unreachable_checkpoint_contributes_no_transition_loss);
+    run_test("unreachable checkpoint carries no public value",
+             test_unreachable_checkpoint_contributes_no_public_value);
     run_test("stale private reclamation by publication order",
              test_private_only_capture_reclaims_stale_resident_by_publication_order);
     run_test("stale reclamation prefers oldest publication order",

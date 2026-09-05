@@ -24,6 +24,9 @@ struct ContextPortfolioCheckpointValue {
     std::uint64_t rebuild_ns           = 0;
     std::uint64_t baseline_recovery_ns = 0;
     std::uint64_t target_recovery_ns   = 0;
+    // A checkpoint the lineage has provably diverged from saves nothing by being retained, so it
+    // must not contribute a transition loss when a plan drops it.
+    bool unreachable = false;
 };
 
 struct ContextPortfolioValueResult {
@@ -73,6 +76,7 @@ public:
                 checkpoint.rebuild_ns > checkpoint.target_recovery_ns
                     ? checkpoint.rebuild_ns - checkpoint.target_recovery_ns
                     : 0;
+            if (checkpoint.unreachable) { continue; }
             owner->baseline_best = std::max(owner->baseline_best, baseline_saving);
             owner->target_best   = std::max(owner->target_best, target_saving);
             owner->private_transition_loss =
