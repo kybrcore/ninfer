@@ -1,5 +1,6 @@
 #include "serve/openai_chat.h"
 #include "serve/openai_common.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_validation.h"
 
 #include <algorithm>
@@ -798,7 +799,7 @@ struct TemplateOptions {
     std::optional<bool> enable_thinking;
     std::optional<bool> preserve_thinking;
     // Froggeric v22.5 extensions; only accepted when the engine style is froggeric-v22.5.
-    FroggericV225TemplateOptions froggeric_v225;
+    ninfer::FroggericV225Options froggeric_v225;
 };
 
 TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_style) {
@@ -815,24 +816,6 @@ TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_
     if (!kwargs.is_object()) {
         bad_request("chat_template_kwargs must be an object", "chat_template_kwargs");
     }
-    for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
-        const bool is_base =
-            iterator.key() == "enable_thinking" || iterator.key() == "preserve_thinking";
-        const bool is_v225 = is_froggeric_v225_template_key(iterator.key());
-        // Null values are neutral: accepted for unknown keys (matching the pre-existing
-        // behavior) and for known keys alike; only non-null values are validated.
-        const bool accepted = iterator.value().is_null() || is_base ||
-                              (is_v225 && chat_style == ninfer::ChatStyle::FroggericV225);
-        if (!accepted) {
-            if (is_v225 && !iterator.value().is_null()) {
-                bad_request("chat_template_kwargs." + iterator.key() +
-                                " is only supported with --chat-style froggeric-v22.5",
-                            "chat_template_kwargs", "chat_template_option_not_supported");
-            }
-            bad_request("chat_template_kwargs." + iterator.key() + " is not supported",
-                        "chat_template_kwargs", "chat_template_option_not_supported");
-        }
-    }
     auto merge = [&](const char* key, std::optional<bool>& top_level) {
         const std::optional<bool> nested = get_optional_bool(kwargs, key);
         if (top_level && nested && *top_level != *nested) {
@@ -843,11 +826,8 @@ TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_
     };
     merge("enable_thinking", output.enable_thinking);
     merge("preserve_thinking", output.preserve_thinking);
-    if (chat_style == ninfer::ChatStyle::FroggericV225) {
-        output.froggeric_v225 = parse_froggeric_v225_template_options(kwargs);
-        reject_conflicting_preserve_options(output.froggeric_v225.preserve_reasoning,
-                                            output.preserve_thinking);
-    }
+    output.froggeric_v225 = decode_froggeric_v225_kwargs(
+        chat_style, kwargs, /*accept_enable_thinking=*/true, output.preserve_thinking);
     return output;
 }
 
@@ -929,17 +909,7 @@ OpenAIChatRequest parse_chat_completion_request(const Json& body, const RequestL
     const TemplateOptions template_options = parse_template_options(body, limits.chat_style);
     output.generation.enable_thinking      = template_options.enable_thinking;
     output.generation.preserve_thinking    = template_options.preserve_thinking;
-    output.generation.froggeric_v225.preserve_reasoning =
-        template_options.froggeric_v225.preserve_reasoning;
-    output.generation.froggeric_v225.auto_disable_thinking_with_tools =
-        template_options.froggeric_v225.auto_disable_thinking_with_tools.value_or(false);
-    if (template_options.froggeric_v225.json_tool_format) {
-        output.generation.froggeric_v225.tool_call_format = ninfer::ToolCallFormat::Json;
-    }
-    output.generation.froggeric_v225.max_tool_arg_chars =
-        template_options.froggeric_v225.max_tool_arg_chars.value_or(0);
-    output.generation.froggeric_v225.max_tool_response_chars =
-        template_options.froggeric_v225.max_tool_response_chars.value_or(0);
+    output.generation.froggeric_v225       = template_options.froggeric_v225;
     apply_openai_prompt_cache_policy(output.generation, cache_policy);
     return output;
 }
