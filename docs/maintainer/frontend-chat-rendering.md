@@ -201,7 +201,8 @@ time; the ratios, not the absolute microseconds, are the portable signal.
   be structured, the complete region is returned as ordinary assistant content with no `tool_calls`
   and `finish_reason=stop`, and `request_done.result.tool_call_parse` records the fallback reason.
   XML-like text inside an argument value is the common trigger; `tool_call_format: "json"` avoids
-  the XML ambiguity for such payloads.
+  the XML ambiguity for such payloads. The JSON parser also normalizes an OpenAI-style
+  `{"function": {"name": ..., "arguments": ...}}` block to the native call shape.
 - `max_tool_response_chars` that would truncate or drop a media placeholder is rejected because the
   Processor expands exactly the placeholder byte range.
 

@@ -115,6 +115,8 @@ existing `none` handling, `minimal` maps to `low` and `high`/`max` map to `xhigh
 style keeps rejecting those aliases. `tool_call_format: "json"` is a non-strict wire format: the
 prompt asks for a JSON object inside `<tool_call>` and the parser validates the wrapper, the
 `name`/`arguments` shape, and the active tool set, but no JSON Schema is enforced during decoding.
+An OpenAI-style `{"function": {"name": ..., "arguments": ...}}` block is accepted and normalized
+to the same call; the native shape wins when both are present.
 `strict:true`, `response_format: {"type":"json_schema"}`, and grammar/guided decoding remain
 rejected.
 
