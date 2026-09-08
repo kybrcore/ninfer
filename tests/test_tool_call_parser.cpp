@@ -947,6 +947,92 @@ int test_json_tool_calls() {
     return failures;
 }
 
+int test_json_tool_calls_openai_wrapper() {
+    const auto contract =
+        json_contract({tool_definition("f", Json{{"a", Json{{"type", "integer"}}}}),
+                       tool_definition("g", Json{{"b", Json{{"type", "string"}}}})});
+    int failures = 0;
+
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"function\":{\"name\":\"f\",\"arguments\":{\"a\":1}}}</tool_call>",
+            64, *contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls[0].name == "f" &&
+                              parsed.tool_calls[0].arguments_json == "{\"a\":1}",
+                          "wrapped json call was not normalized");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"function\":{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\"}}"
+            "</tool_call>",
+            64, *contract);
+        failures += check(parsed.is_tool_call_response &&
+                              parsed.tool_calls[0].arguments_json == "{\"a\":1}",
+                          "wrapped json string arguments were not unwrapped");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"function\":{\"name\":\"g\"}}</tool_call>", 64, *contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls[0].name == "g" &&
+                              parsed.tool_calls[0].arguments_json.empty(),
+                          "wrapped json call without arguments");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"name\":\"f\",\"arguments\":{\"a\":2},\"function\":"
+            "{\"name\":\"g\",\"arguments\":{\"b\":\"x\"}}}</tool_call>",
+            64, *contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls[0].name == "f" &&
+                              parsed.tool_calls[0].arguments_json == "{\"a\":2}",
+                          "native json shape did not win over the wrapper");
+    }
+    for (const auto& [text, reason] : std::vector<std::pair<std::string,
+                                                            ninfer::ToolCallParseFallbackReason>>{
+             {"<tool_call>{\"function\":\"nope\"}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::MalformedStructure},
+             {"<tool_call>{\"function\":{\"name\":\"nope\",\"arguments\":{}}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::UndeclaredTool},
+             {"<tool_call>{\"function\":{\"name\":\"\",\"arguments\":{}}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::InvalidToolName},
+             {"<tool_call>{\"function\":{\"arguments\":{}}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::InvalidToolName},
+             {"<tool_call>{\"function\":{\"function\":{\"name\":\"f\"}}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::InvalidToolName}}) {
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, *contract);
+        failures += check(!parsed.is_tool_call_response && parsed.content == text &&
+                              parsed.diagnostics.fallback_reason == reason,
+                          "wrapped json fallback reason for: " + text);
+    }
+    {
+        const std::string text =
+            "prefix<tool_call>{\"function\":{\"name\":\"f\",\"arguments\":{\"a\":1}}}"
+            "</tool_call>\n"
+            "<tool_call>{\"name\":\"g\",\"arguments\":{\"b\":\"x\"}}</tool_call>";
+        std::string reference;
+        bool stable = true;
+        for (std::size_t split = 0; split <= text.size(); ++split) {
+            fi::ToolCallOutputDecoder decoder(contract, 64);
+            std::string visible = decoder.feed(text.substr(0, split));
+            visible += decoder.feed(text.substr(split));
+            const auto terminal = decoder.finish();
+            std::string signature = visible + "|" + terminal.content;
+            for (const auto& call : terminal.tool_calls) {
+                signature += "|" + call.name + ":" + call.arguments_json;
+            }
+            if (split == 0) {
+                reference = signature;
+            } else if (signature != reference) {
+                stable = false;
+            }
+        }
+        failures += check(stable, "wrapped json decoder is chunk-independent");
+    }
+    return failures;
+}
+
 int test_incremental_valid_and_boolean() {
     fi::ToolCallOutputDecoder legacy(std::make_shared<fi::ToolCallOutputContract>(), 64);
     std::string visible;
@@ -1065,6 +1151,7 @@ int main() {
     failures += test_incremental_fallback_preserves_bytes();
     failures += test_incremental_embedded_parameter_markup();
     failures += test_json_tool_calls();
+    failures += test_json_tool_calls_openai_wrapper();
     if (failures == 0) { std::cout << "ok\n"; }
     return failures == 0 ? 0 : 1;
 }
