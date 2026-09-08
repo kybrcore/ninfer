@@ -230,6 +230,16 @@ fi::CompiledChatTemplate compile_chat_template(const FrontendResources& resource
     return fi::CompiledChatTemplate::resolve(resources.chat_template_jinja);
 }
 
+// The selected style never skips artifact validation: an inconsistent or unregistered
+// .ninfer must not start with a non-embedded renderer either.
+fi::CompiledChatTemplate compile_chat_template(const FrontendResources& resources,
+                                               ChatStyle chat_style) {
+    const fi::CompiledChatTemplate artifact_template = compile_chat_template(resources);
+    return chat_style == ChatStyle::FroggericV225
+        ? fi::CompiledChatTemplate::froggeric_v225()
+        : artifact_template;
+}
+
 [[noreturn]] void throw_processor_error(const fi::ProcessorError& error) {
     switch (error.kind()) {
     case fi::ProcessorErrorKind::BudgetExceeded:
@@ -329,6 +339,12 @@ fi::ChatRenderOptions render_options(const PromptOptions& options,
                                    .add_vision_id     = options.add_vision_id,
                                    .tool_jsons        = options.tool_jsons};
     rendered.cache_markers.assign(cache_markers.begin(), cache_markers.end());
+    // Froggeric v22.5 request options; the Artifact renderer ignores them.
+    rendered.preserve_reasoning               = options.preserve_reasoning;
+    rendered.auto_disable_thinking_with_tools = options.auto_disable_thinking_with_tools;
+    rendered.tool_call_format                 = options.tool_call_format;
+    rendered.max_tool_arg_chars               = options.max_tool_arg_chars;
+    rendered.max_tool_response_chars          = options.max_tool_response_chars;
     return rendered;
 }
 
@@ -878,7 +894,7 @@ PreparedContextCache prepare_context_cache(
 class Frontend::Impl {
 public:
     Impl(const FrontendResources& resources, bool registered_checkpoint, FrontendOptions options)
-        : chat_template(compile_chat_template(resources)),
+        : chat_template(compile_chat_template(resources, options.chat_style)),
           tokenizer(std::make_shared<const fi::Tokenizer>(
               fi::TokenizerResources{.tokenizer_json         = resources.tokenizer_json,
                                      .tokenizer_config_json  = resources.tokenizer_config_json,

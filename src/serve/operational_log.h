@@ -56,7 +56,7 @@ public:
     void bind_failure(std::string_view host, int port) const;
     void listen_failure(std::string_view host, int port) const;
     void server_ready(std::string_view host, int port, std::string_view model_id,
-                      bool auth_enabled) const;
+                      bool auth_enabled, ChatStyle chat_style) const;
     void server_stopped() const;
     void server_failure(bool serving, std::string_view detail) const;
 
