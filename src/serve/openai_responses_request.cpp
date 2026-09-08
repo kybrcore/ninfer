@@ -1,5 +1,6 @@
 #include "serve/openai_responses.h"
 #include "serve/openai_common.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_validation.h"
 
 #include <algorithm>
@@ -985,36 +986,6 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
     if (!kwargs.is_object()) {
         bad_request("chat_template_kwargs must be an object", "chat_template_kwargs");
     }
-    for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
-        const bool is_base = iterator.key() == "preserve_thinking";
-        const bool is_v225 = is_froggeric_v225_template_key(iterator.key());
-        // Null values are neutral: accepted for unknown keys (matching the pre-existing
-        // behavior) and for known keys alike; only non-null values are validated.
-        const bool accepted = iterator.value().is_null() || is_base ||
-                              (is_v225 && chat_style == ninfer::ChatStyle::FroggericV225);
-        if (!accepted) {
-            if (is_v225 && !iterator.value().is_null()) {
-                bad_request("chat_template_kwargs." + iterator.key() +
-                                " is only supported with --chat-style froggeric-v22.5",
-                            "chat_template_kwargs", "chat_template_option_not_supported");
-            }
-            bad_request("chat_template_kwargs." + iterator.key() + " is not supported",
-                        "chat_template_kwargs", "chat_template_option_not_supported");
-        }
-    }
-    if (chat_style == ninfer::ChatStyle::FroggericV225) {
-        const FroggericV225TemplateOptions v225 = parse_froggeric_v225_template_options(kwargs);
-        out.generation.froggeric_v225.preserve_reasoning = v225.preserve_reasoning;
-        out.generation.froggeric_v225.auto_disable_thinking_with_tools =
-            v225.auto_disable_thinking_with_tools.value_or(false);
-        if (v225.json_tool_format) {
-            out.generation.froggeric_v225.tool_call_format = ninfer::ToolCallFormat::Json;
-        }
-        out.generation.froggeric_v225.max_tool_arg_chars =
-            v225.max_tool_arg_chars.value_or(0);
-        out.generation.froggeric_v225.max_tool_response_chars =
-            v225.max_tool_response_chars.value_or(0);
-    }
     if (kwargs.contains("preserve_thinking") && !kwargs.at("preserve_thinking").is_null()) {
         if (!kwargs.at("preserve_thinking").is_boolean()) {
             bad_request("chat_template_kwargs.preserve_thinking must be a boolean or null",
@@ -1027,10 +998,8 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
         }
         out.generation.preserve_thinking = nested;
     }
-    // The renderer prefers preserve_reasoning, so a conflicting pair must be rejected here
-    // regardless of whether the caller supplied the alias at top level or in the kwargs.
-    reject_conflicting_preserve_options(out.generation.froggeric_v225.preserve_reasoning,
-                                        out.generation.preserve_thinking);
+    out.generation.froggeric_v225 = decode_froggeric_v225_kwargs(
+        chat_style, kwargs, /*accept_enable_thinking=*/false, out.generation.preserve_thinking);
 }
 
 void parse_truncation(const Json& body) {

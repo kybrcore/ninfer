@@ -1,4 +1,5 @@
 #include "serve/translate.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_json.h"
 
 #include <nlohmann/json.hpp>
@@ -159,17 +160,13 @@ ResolvedPromptSemantics resolve_prompt_semantics(const GenerationRequest& reques
         result.reasoning_effort = ninfer::ReasoningEffort::XHigh;
         break;
     case RequestedReasoningEffort::Minimal:
-        // The froggeric v22.5 template maps the API minimal alias to its low effort.
-        if (server.chat_style == ninfer::ChatStyle::FroggericV225) {
-            result.reasoning_effort = ninfer::ReasoningEffort::Low;
-            break;
-        }
-        [[fallthrough]];
     case RequestedReasoningEffort::High:
     case RequestedReasoningEffort::Max:
-        // The froggeric v22.5 template maps the API high/max aliases to xhigh.
-        if (server.chat_style == ninfer::ChatStyle::FroggericV225) {
-            result.reasoning_effort = ninfer::ReasoningEffort::XHigh;
+        // froggeric v22.5 maps the API aliases onto its own effort levels; other styles reject
+        // them.
+        if (const std::optional<ninfer::ReasoningEffort> alias =
+                froggeric_v225_effort_alias(server.chat_style, requested)) {
+            result.reasoning_effort = *alias;
             break;
         }
         invalid_prompt_option("reasoning effort '" +
