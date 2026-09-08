@@ -197,12 +197,15 @@ time; the ratios, not the absolute microseconds, are the portable signal.
   through the template's mapping branch (sorted keys, Python tojson spacing); a non-object XML
   argument string is rejected because the wire contract requires an object.
 - Unknown chat roles cannot be represented by the closed `ChatRole` enum and are rejected.
-- XML tool-call output parsing is terminal and all-or-nothing: when the model's tool region cannot
-  be structured, the complete region is returned as ordinary assistant content with no `tool_calls`
-  and `finish_reason=stop`, and `request_done.result.tool_call_parse` records the fallback reason.
-  XML-like text inside an argument value is the common trigger; `tool_call_format: "json"` avoids
-  the XML ambiguity for such payloads. The JSON parser also normalizes an OpenAI-style
-  `{"function": {"name": ..., "arguments": ...}}` block to the native call shape.
+- XML tool-call output parsing is terminal and all-or-nothing: when no anchor parses as a complete
+  region, the complete region is returned as ordinary assistant content with no `tool_calls` and
+  `finish_reason=stop`, and `request_done.result.tool_call_parse` records the fallback reason.
+  The parser anchors on the left-most `<tool_call>` whose suffix parses (a marker quoted in prose no
+  longer poisons the real call) and resolves `</parameter>` closes by region backtracking, so
+  literal `<parameter=...>` text inside an argument value survives. `tool_call_format: "json"`
+  avoids the XML ambiguity entirely; the JSON parser also normalizes an OpenAI-style
+  `{"function": {"name": ..., "arguments": ...}}` block to the native call shape and emits `{}`
+  for missing or null arguments.
 - `max_tool_response_chars` that would truncate or drop a media placeholder is rejected because the
   Processor expands exactly the placeholder byte range.
 
