@@ -1482,6 +1482,7 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
             std::move(processed.rewrite_execution_frontiers);
         message_boundaries = std::move(processed.message_boundaries);
         cache_boundaries   = std::move(processed.cache_boundaries);
+        result.generation_starts_in_thinking = processed.generation_starts_in_thinking;
     } else {
         const fi::RenderedChat rendered =
             impl_->chat_template.render(messages, render_options(options, rendered_markers));
@@ -1500,6 +1501,7 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
             std::move(encoded.rewrite_execution_frontiers);
         message_boundaries = std::move(encoded.message_boundaries);
         cache_boundaries   = std::move(encoded.cache_boundaries);
+        result.generation_starts_in_thinking = rendered.generation_starts_in_thinking;
         assign_text_positions(result);
     }
     (void)checked_token_count(result.token_ids.size());
@@ -1509,7 +1511,8 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
         cache_boundaries, result.vision_items, engine_tool_marker_index, leading_boundary,
         checked_token_count(result.token_ids.size()));
     result.starts_in_reasoning =
-        options.continuation == PromptContinuationMode::NewAssistantTurn && options.enable_thinking;
+        options.continuation == PromptContinuationMode::NewAssistantTurn &&
+        result.generation_starts_in_thinking;
     result.prepare.seconds = std::chrono::duration<double>(Clock::now() - start).count();
     return PreparedPrompt(std::move(prepared));
 }

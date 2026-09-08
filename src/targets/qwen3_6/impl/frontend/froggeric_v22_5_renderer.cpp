@@ -1022,7 +1022,8 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
                         .rewrite_checkpoint           = rewrite_checkpoint,
                         .rewrite_execution_boundaries = std::move(out.execution_boundaries),
                         .message_boundaries           = std::move(message_boundaries),
-                        .cache_boundaries             = std::move(cache_boundaries)};
+                        .cache_boundaries             = std::move(cache_boundaries),
+                        .generation_starts_in_thinking = thinking};
 }
 
 } // namespace ninfer::targets::qwen3_6::frontend_internal

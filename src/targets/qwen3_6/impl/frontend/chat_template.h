@@ -138,6 +138,10 @@ struct RenderedChat {
     std::vector<std::optional<std::size_t>> message_boundaries;
     // One rendered byte boundary per requested cache marker.
     std::vector<std::optional<std::size_t>> cache_boundaries;
+    // Thinking state the generation prompt leaves the model in: false when a template-level
+    // option or an inline control tag closed thinking before the generation suffix (empty think
+    // prefill), so the output session must not start in reasoning-split mode.
+    bool generation_starts_in_thinking = true;
 };
 
 enum class ChatTemplateSemantics : std::uint8_t {
