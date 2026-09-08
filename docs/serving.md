@@ -172,6 +172,12 @@ The endpoint supports:
   `max_tool_arg_chars`, and `max_tool_response_chars` (see "Chat template styles");
 - Assistant `reasoning_content` and `reasoning` history aliases.
 
+Tool-call parsing is terminal and all-or-nothing. When the model's tool region cannot be
+structured, the complete region is returned as ordinary assistant content: no `tool_calls`,
+`finish_reason=stop`, and `request_done.result.tool_call_parse` records the fallback reason (see
+"Structured request log"). XML-like text inside an argument value is the common trigger; the
+`froggeric-v22.5` `tool_call_format: "json"` avoids the XML ambiguity for such payloads.
+
 Options whose observable behavior the Engine cannot provide are rejected when they request that
 behavior. This includes JSON constrained output, nonzero `logit_bias`, requested log probabilities,
 audio/file input or audio output, `strict:true`, required or named tool choice,
