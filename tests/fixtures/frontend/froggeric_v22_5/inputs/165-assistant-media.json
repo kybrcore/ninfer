@@ -1,0 +1,35 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hi"
+  },
+  {
+   "role": "assistant",
+   "content": [
+    {
+     "type": "text",
+     "text": "see "
+    },
+    {
+     "type": "image"
+    }
+   ]
+  },
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "image"
+    },
+    {
+     "type": "text",
+     "text": "now"
+    }
+   ]
+  }
+ ],
+ "kwargs": {
+  "add_vision_id": true
+ }
+}

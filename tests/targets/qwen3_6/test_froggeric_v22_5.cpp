@@ -207,6 +207,206 @@ void report_first_diff(const std::string& actual, const std::string& expected,
               << "  actual: ...\"" << ctx(actual, offset) << "\"\n";
 }
 
+int check(bool condition, const std::string& message) {
+    if (condition) { return 0; }
+    std::cout << "FAIL " << message << '\n';
+    return 1;
+}
+
+fj::ChatMessage text_message(ninfer::ChatRole role, std::string text) {
+    fj::ChatMessage message;
+    message.role = role;
+    message.parts.push_back(fj::ChatPart::text_part(std::move(text)));
+    return message;
+}
+
+fj::ChatMessage tool_image_result() {
+    fj::ChatMessage tool;
+    tool.role = ninfer::ChatRole::Tool;
+    tool.parts.push_back(fj::ChatPart::text_part("captured "));
+    tool.parts.push_back(fj::ChatPart::image(fj::MediaData{}));
+    return tool;
+}
+
+const std::string kTestToolJson =
+    R"({"type":"function","function":{"name":"f","parameters":{"type":"object"}}})";
+
+bool overlaps_placeholder(const fj::RenderedChat& rendered, fj::ByteSpan span) {
+    return std::any_of(
+        rendered.media_placeholders.begin(), rendered.media_placeholders.end(),
+        [&](const fj::MediaPlaceholderByteSpec& placeholder) {
+            return span.begin < placeholder.bytes.end && placeholder.bytes.begin < span.end;
+        });
+}
+
+// Tool and assistant media must keep their placeholder metadata: the Processor expands exactly
+// the pad token and rejects a rendered chat whose placeholder count does not match its media
+// items, so dropping the metadata turns a supported tool-image result into a 400.
+int test_media_placeholder_provenance() {
+    int failures                            = 0;
+    const fj::CompiledChatTemplate renderer = fj::CompiledChatTemplate::froggeric_v225();
+
+    std::vector<fj::ChatMessage> messages;
+    messages.push_back(text_message(ninfer::ChatRole::User, "capture"));
+    fj::ChatMessage assistant;
+    assistant.role = ninfer::ChatRole::Assistant;
+    assistant.tool_calls.push_back(fj::ToolCall{.name = "f", .arguments_json = "{}"});
+    messages.push_back(std::move(assistant));
+    messages.push_back(tool_image_result());
+
+    fj::ChatRenderOptions options;
+    options.tool_jsons.push_back(kTestToolJson);
+    const fj::RenderedChat rendered = renderer.render(messages, options);
+    failures += check(rendered.media_placeholders.size() == 1,
+                      "tool image publishes one media placeholder");
+    if (rendered.media_placeholders.size() == 1) {
+        const fj::MediaPlaceholderByteSpec& placeholder = rendered.media_placeholders.front();
+        failures += check(placeholder.modality == fj::Modality::Image &&
+                              placeholder.item_index == 0,
+                          "tool image placeholder modality and item index");
+        failures += check(rendered.text.substr(placeholder.bytes.begin,
+                                               placeholder.bytes.end - placeholder.bytes.begin) ==
+                              "<|image_pad|>",
+                          "tool image placeholder covers only the pad token");
+    }
+    failures += check(
+        std::none_of(rendered.literal_spans.begin(), rendered.literal_spans.end(),
+                     [&](fj::ByteSpan span) { return overlaps_placeholder(rendered, span); }),
+        "tool image placeholder is not inside a literal span");
+
+    std::vector<fj::ChatMessage> assistant_media;
+    assistant_media.push_back(text_message(ninfer::ChatRole::User, "hi"));
+    fj::ChatMessage media_assistant;
+    media_assistant.role = ninfer::ChatRole::Assistant;
+    media_assistant.parts.push_back(fj::ChatPart::text_part("see "));
+    media_assistant.parts.push_back(fj::ChatPart::image(fj::MediaData{}));
+    assistant_media.push_back(std::move(media_assistant));
+    fj::ChatRenderOptions vision_options;
+    vision_options.add_vision_id = true;
+    const fj::RenderedChat assistant_rendered =
+        renderer.render(assistant_media, vision_options);
+    failures += check(assistant_rendered.media_placeholders.size() == 1 &&
+                          assistant_rendered.text.find("Picture 1: <|vision_start|><|image_pad|>") !=
+                              std::string::npos,
+                      "assistant image publishes its placeholder and vision id");
+
+    fj::ChatRenderOptions truncating = options;
+    truncating.max_tool_response_chars = 3;
+    bool rejected                      = false;
+    try {
+        (void)renderer.render(messages, truncating);
+    } catch (const std::invalid_argument& error) {
+        rejected = std::string(error.what()).find("truncates a media placeholder") !=
+                   std::string::npos;
+    }
+    failures += check(rejected, "tool media truncation is rejected explicitly");
+    return failures;
+}
+
+// Inline tags are stripped from the concatenated render, so part boundaries must be remapped
+// through the removal instead of being computed on the raw parts.
+int test_tag_stripping_provenance() {
+    int failures                            = 0;
+    const fj::CompiledChatTemplate renderer = fj::CompiledChatTemplate::froggeric_v225();
+
+    std::vector<fj::ChatMessage> messages;
+    fj::ChatMessage user;
+    user.role = ninfer::ChatRole::User;
+    user.parts.push_back(fj::ChatPart::text_part("<|think_off|>ab"));
+    user.parts.push_back(fj::ChatPart::text_part("cd"));
+    messages.push_back(std::move(user));
+
+    fj::ChatRenderOptions options;
+    options.cache_markers.push_back(ninfer::PromptCacheMarker{
+        .after_message_count      = 1,
+        .location                 = ninfer::PromptCacheMarkerLocation::MessagePartBoundary,
+        .after_message_part_count = 1});
+    options.cache_markers.push_back(ninfer::PromptCacheMarker{
+        .after_message_count      = 1,
+        .location                 = ninfer::PromptCacheMarkerLocation::MessagePartBoundary,
+        .after_message_part_count = 2});
+    const fj::RenderedChat rendered = renderer.render(messages, options);
+    const std::size_t content       = rendered.text.find("abcd");
+    failures += check(content != std::string::npos, "tag-stripped user content is abcd");
+    failures += check(rendered.cache_boundaries.size() == 2 && rendered.cache_boundaries[0] &&
+                          rendered.cache_boundaries[1],
+                      "tag-stripped part boundaries resolve");
+    if (content != std::string::npos && rendered.cache_boundaries.size() == 2 &&
+        rendered.cache_boundaries[0] && rendered.cache_boundaries[1]) {
+        failures += check(*rendered.cache_boundaries[0] == content + 2 &&
+                              *rendered.cache_boundaries[1] == content + 4,
+                          "part boundaries follow the surviving bytes");
+    }
+    return failures;
+}
+
+// NInfer carries tool arguments as a JSON string; object strings are normalized through the
+// template's mapping branch (documented behavior, not byte parity with the raw string branch).
+int test_tool_argument_string_normalization() {
+    int failures                            = 0;
+    const fj::CompiledChatTemplate renderer = fj::CompiledChatTemplate::froggeric_v225();
+
+    std::vector<fj::ChatMessage> messages;
+    messages.push_back(text_message(ninfer::ChatRole::User, "q"));
+    fj::ChatMessage assistant;
+    assistant.role = ninfer::ChatRole::Assistant;
+    assistant.tool_calls.push_back(
+        fj::ToolCall{.name = "f", .arguments_json = R"({"city":"Paris","units":"c"})"});
+    messages.push_back(std::move(assistant));
+
+    fj::ChatRenderOptions xml_options;
+    xml_options.tool_jsons.push_back(kTestToolJson);
+    const fj::RenderedChat xml = renderer.render(messages, xml_options);
+    failures += check(xml.text.find("<parameter=city>\nParis\n</parameter>\n"
+                                    "<parameter=units>\nc\n</parameter>") != std::string::npos,
+                      "XML object-string arguments normalize to parameters");
+
+    fj::ChatRenderOptions json_options = xml_options;
+    json_options.tool_call_format      = ninfer::ToolCallFormat::Json;
+    const fj::RenderedChat json        = renderer.render(messages, json_options);
+    failures += check(json.text.find(R"({"name": "f", "arguments": {"city": "Paris", )"
+                                     R"("units": "c"}})") != std::string::npos,
+                      "JSON object-string arguments normalize to a sorted object");
+    return failures;
+}
+
+// The generation suffix and the output session must agree on the thinking state left by inline
+// control tags, not only on the request-level enable_thinking flag.
+int test_generation_thinking_state() {
+    int failures                            = 0;
+    const fj::CompiledChatTemplate renderer = fj::CompiledChatTemplate::froggeric_v225();
+
+    std::vector<fj::ChatMessage> messages;
+    messages.push_back(text_message(ninfer::ChatRole::User, "<|think_off|>hi"));
+    fj::ChatRenderOptions options;
+    options.enable_thinking        = true;
+    const fj::RenderedChat closed  = renderer.render(messages, options);
+    failures += check(!closed.generation_starts_in_thinking &&
+                          closed.text.ends_with("<think>\n\n</think>\n\n"),
+                      "think_off closes the generation prompt");
+
+    messages[0]                    = text_message(ninfer::ChatRole::User, "<|think_on|>hi");
+    options.enable_thinking        = false;
+    const fj::RenderedChat opened  = renderer.render(messages, options);
+    failures += check(opened.generation_starts_in_thinking &&
+                          opened.text.ends_with("<|im_start|>assistant\n<think>\n"),
+                      "think_on opens the generation prompt");
+    return failures;
+}
+
+int test_v225_capabilities() {
+    const fj::CompiledChatTemplate renderer        = fj::CompiledChatTemplate::froggeric_v225();
+    const ninfer::PromptCapabilities capabilities = renderer.capabilities();
+    int failures                                   = 0;
+    failures += check(capabilities.enable_thinking && capabilities.reasoning_effort.low &&
+                          capabilities.reasoning_effort.medium &&
+                          capabilities.reasoning_effort.xhigh &&
+                          capabilities.reasoning_effort.default_effort ==
+                              ninfer::ReasoningEffort::Medium,
+                      "v22.5 capabilities report low/medium/xhigh with a medium default");
+    return failures;
+}
+
 } // namespace
 
 int main() {
@@ -217,6 +417,11 @@ int main() {
 
     if (!sha256_file(fixture_dir / "chat_template.jinja", kPrettyFixtureSha, failures)) {}
     if (!sha256_file(fixture_dir / "chat_template_oneline.txt", kOnelineFixtureSha, failures)) {}
+    failures += test_media_placeholder_provenance();
+    failures += test_tag_stripping_provenance();
+    failures += test_tool_argument_string_normalization();
+    failures += test_generation_thinking_state();
+    failures += test_v225_capabilities();
 
     std::vector<std::filesystem::path> inputs;
     for (const auto& entry :
