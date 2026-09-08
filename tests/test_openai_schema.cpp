@@ -595,11 +595,13 @@ int test_froggeric_v225_options() {
                                         {"max_tool_arg_chars", 12},
                                         {"max_tool_response_chars", 34}};
     const GenerationRequest mapped = parse_v225(body).generation;
-    failures += check(mapped.preserve_reasoning == true &&
-                          mapped.auto_disable_thinking_with_tools &&
-                          mapped.tool_call_format == ninfer::ToolCallFormat::Json &&
-                          mapped.max_tool_arg_chars == 12 && mapped.max_tool_response_chars == 34,
-                      "v22.5 template kwargs map onto the generation request");
+    const bool mapped_ok =
+        mapped.froggeric_v225.preserve_reasoning == true &&
+        mapped.froggeric_v225.auto_disable_thinking_with_tools &&
+        mapped.froggeric_v225.tool_call_format == ninfer::ToolCallFormat::Json &&
+        mapped.froggeric_v225.max_tool_arg_chars == 12 &&
+        mapped.froggeric_v225.max_tool_response_chars == 34;
+    failures += check(mapped_ok, "v22.5 template kwargs map onto the generation request");
 
     for (const Json& invalid : {Json{{"tool_call_format", "yaml"}},
                                 Json{{"max_tool_arg_chars", -1}},
@@ -620,7 +622,7 @@ int test_froggeric_v225_options() {
         check(api_error([&] { (void)parse_v225(body); }).code == "conflicting_template_option",
               "preserve_reasoning conflicts with top-level preserve_thinking");
     body["chat_template_kwargs"] = Json{{"preserve_reasoning", false}};
-    failures += check(parse_v225(body).generation.preserve_reasoning == false,
+    failures += check(parse_v225(body).generation.froggeric_v225.preserve_reasoning == false,
                       "matching preserve aliases are accepted");
 
     // Effort aliases: v22.5 maps minimal->low and high/max->xhigh; artifact keeps rejecting.

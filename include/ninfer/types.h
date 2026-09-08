@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ninfer/froggeric_v225.h>
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -414,13 +416,8 @@ enum class PromptContinuationMode : std::uint8_t {
     ContinueFinalAssistant,
 };
 
-// Tool-call history/instruction serialization for the compiled chat renderers. XML is the
-// default; JSON is a non-strict alternate format (no JSON Schema guarantees).
-enum class ToolCallFormat : std::uint8_t {
-    Xml  = 0,
-    Json,
-};
-
+// Tool-call history/instruction serialization for the compiled chat renderers lives in
+// ninfer/froggeric_v225.h together with the rest of the v22.5 request surface.
 struct PromptOptions {
     PromptContinuationMode continuation = PromptContinuationMode::NewAssistantTurn;
     bool enable_thinking                = true;
@@ -430,12 +427,7 @@ struct PromptOptions {
     std::vector<std::string> tool_jsons;
     // Froggeric v22.5 request options. The Artifact renderer deliberately ignores them, so
     // defaults keep every existing prompt byte-identical.
-    // Alias of preserve_thinking; when set, conflicts with preserve_thinking are an error.
-    std::optional<bool> preserve_reasoning;
-    bool auto_disable_thinking_with_tools = false;
-    ToolCallFormat tool_call_format       = ToolCallFormat::Xml;
-    std::uint32_t max_tool_arg_chars      = 0;
-    std::uint32_t max_tool_response_chars = 0;
+    FroggericV225Options froggeric_v225;
 };
 
 enum class CacheRetentionHint : std::uint8_t {

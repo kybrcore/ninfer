@@ -169,19 +169,20 @@ fj::ChatRenderOptions parse_options(const njson& spec) {
     }
     if (kwargs.contains("preserve_reasoning") &&
         kwargs.at("preserve_reasoning").is_boolean()) {
-        out.preserve_reasoning = kwargs.at("preserve_reasoning").get<bool>();
+        out.froggeric_v225.preserve_reasoning = kwargs.at("preserve_reasoning").get<bool>();
     }
     out.add_vision_id                     = kwargs.value("add_vision_id", false);
-    out.auto_disable_thinking_with_tools  = kwargs.value("auto_disable_thinking_with_tools", false);
+    out.froggeric_v225.auto_disable_thinking_with_tools =
+        kwargs.value("auto_disable_thinking_with_tools", false);
     const std::string tool_format = kwargs.value("tool_call_format", std::string("xml"));
     if (tool_format == "json") {
-        out.tool_call_format = ninfer::ToolCallFormat::Json;
+        out.froggeric_v225.tool_call_format = ninfer::ToolCallFormat::Json;
     } else if (tool_format != "xml") {
         throw std::runtime_error("oracle input uses an unsupported tool_call_format: " +
                                  tool_format);
     }
-    out.max_tool_arg_chars      = kwargs.value("max_tool_arg_chars", 0U);
-    out.max_tool_response_chars = kwargs.value("max_tool_response_chars", 0U);
+    out.froggeric_v225.max_tool_arg_chars      = kwargs.value("max_tool_arg_chars", 0U);
+    out.froggeric_v225.max_tool_response_chars = kwargs.value("max_tool_response_chars", 0U);
     if (spec.contains("tools") && spec.at("tools").is_array()) {
         for (const auto& tool : spec.at("tools")) {
             if (!tool.is_object()) { throw std::runtime_error("oracle tools must be objects"); }
@@ -291,7 +292,7 @@ int test_media_placeholder_provenance() {
                       "assistant image publishes its placeholder and vision id");
 
     fj::ChatRenderOptions truncating = options;
-    truncating.max_tool_response_chars = 3;
+    truncating.froggeric_v225.max_tool_response_chars = 3;
     bool rejected                      = false;
     try {
         (void)renderer.render(messages, truncating);
@@ -362,7 +363,7 @@ int test_tool_argument_string_normalization() {
                       "XML object-string arguments normalize to parameters");
 
     fj::ChatRenderOptions json_options = xml_options;
-    json_options.tool_call_format      = ninfer::ToolCallFormat::Json;
+    json_options.froggeric_v225.tool_call_format      = ninfer::ToolCallFormat::Json;
     const fj::RenderedChat json        = renderer.render(messages, json_options);
     failures += check(json.text.find(R"({"name": "f", "arguments": {"city": "Paris", )"
                                      R"("units": "c"}})") != std::string::npos,

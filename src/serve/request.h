@@ -187,11 +187,7 @@ struct GenerationRequest {
     std::optional<bool> preserve_thinking;
     // Froggeric v22.5 request options. The artifact style rejects them at parse time; the
     // renderer's template precedence (preserve_reasoning over preserve_thinking) still applies.
-    std::optional<bool> preserve_reasoning;
-    bool auto_disable_thinking_with_tools = false;
-    ninfer::ToolCallFormat tool_call_format = ninfer::ToolCallFormat::Xml;
-    std::uint32_t max_tool_arg_chars      = 0;
-    std::uint32_t max_tool_response_chars = 0;
+    ninfer::FroggericV225Options froggeric_v225;
     ninfer::PromptContinuationMode continuation = ninfer::PromptContinuationMode::NewAssistantTurn;
     bool allow_engine_automatic_shared_prefixes = true;
     SamplingParams sampling;
