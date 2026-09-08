@@ -441,6 +441,64 @@ int test_xml_parameter_close_budget() {
     return failures;
 }
 
+int test_xml_leaked_chatml_function_open() {
+    const auto contract = contract_for("bash", Json{{"command", Json{{"type", "string"}}}});
+    int failures        = 0;
+
+    {
+        // Verbatim production output (2026-09-08 pi session): the model replaced the '<' of
+        // "<function=" with the ChatML start token.
+        const std::string command = "cd /Users/jian/Workspace/ai-coding/playground && "
+                                    "grep -n \"dragK\\|重力\" elephant-toothpaste-v2.html | head";
+        const std::string text =
+            "<tool_call>\n<|im_start|>function=bash>\n<parameter=command>\n" + command +
+            "\n</parameter>\n</function>\n</tool_call>";
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls.front().name == "bash" &&
+                              Json::parse(parsed.tool_calls.front().arguments_json)
+                                      .at("command") == command,
+                          "leaked <|im_start|> function open was not rescued");
+    }
+    for (const std::string& open : {
+             std::string("<|im_start|><function=bash>"),
+             std::string("<|im_end|>function=bash>"),
+         }) {
+        const std::string text = "<tool_call>\n" + open +
+                                 "\n<parameter=command>\nls\n</parameter>\n</function>\n</tool_call>";
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls.front().name == "bash",
+                          "leaked open variant was not rescued: " + open);
+    }
+    {
+        // The unbalanced literal "<parameter=" in the value forces the backtracking search;
+        // it must rescue the leaked open too.
+        const std::string command = "grep -o '<parameter=msg>[^<]*' input.txt";
+        const std::string text =
+            "<tool_call>\n<|im_start|>function=bash>\n<parameter=command>\n" + command +
+            "\n</parameter>\n</function>\n</tool_call>";
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                              Json::parse(parsed.tool_calls.front().arguments_json)
+                                      .at("command") == command,
+                          "leaked open was not rescued on the backtracking path");
+    }
+    for (const auto& [text, reason] : std::vector<std::pair<std::string,
+                                                            ninfer::ToolCallParseFallbackReason>>{
+             {"<tool_call>\n<|im_start|>notfunction=bash>\n</function>\n</tool_call>",
+              ninfer::ToolCallParseFallbackReason::MalformedStructure},
+             {"<tool_call>\n<|im_start|>function=nope>\n<parameter=command>\nls\n"
+              "</parameter>\n</function>\n</tool_call>",
+              ninfer::ToolCallParseFallbackReason::UndeclaredTool}}) {
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, contract);
+        failures += check(!parsed.is_tool_call_response &&
+                              parsed.diagnostics.fallback_reason == reason,
+                          "leaked-open negative case: " + text);
+    }
+    return failures;
+}
+
 int test_declared_json_types() {
     const auto contract = contract_for(
         "configure", Json{{"count", Json{{"type", "integer"}}},
@@ -1143,6 +1201,7 @@ int main() {
     failures += test_xml_candidate_anchor();
     failures += test_xml_parameter_close_disambiguation();
     failures += test_xml_parameter_close_budget();
+    failures += test_xml_leaked_chatml_function_open();
     failures += test_declared_json_types();
     failures += test_boolean_boundary();
     failures += test_exact_integer_boundary();

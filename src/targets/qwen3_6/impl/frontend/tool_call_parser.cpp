@@ -26,6 +26,12 @@ constexpr std::string_view kFunctionClose = "</function>";
 constexpr std::string_view kParamOpen     = "<parameter=";
 constexpr std::string_view kParamClose    = "</parameter>";
 
+// The model occasionally replaces the '<' of "<function=" with a ChatML control token, e.g.
+// "<|im_start|>function=bash>"; both markers are accepted as a leaked function-open prefix.
+constexpr std::string_view kChatmlStart      = "<|im_start|>";
+constexpr std::string_view kChatmlEnd        = "<|im_end|>";
+constexpr std::string_view kFunctionOpenBare = "function=";
+
 // A model may quote "<tool_call>" in prose before the real call. Every occurrence is a candidate
 // region anchor, bounded to keep pathological payloads cheap.
 constexpr std::size_t kMaxAnchorCandidates = 64;
@@ -555,7 +561,7 @@ private:
 
     void backtrack_function(std::size_t pos, RawToolCall& call, std::vector<RawToolCall>& calls,
                             SearchState& state) const {
-        if (!consume(pos, kFunctionOpen)) { return; }
+        if (!consume_function_open(pos)) { return; }
         const std::size_t name_begin = pos;
         const std::size_t name_end   = text_.find('>', name_begin);
         if (name_end == std::string_view::npos || name_end == name_begin) { return; }
@@ -622,6 +628,26 @@ private:
         return true;
     }
 
+    // The model occasionally replaces the '<' of "<function=" with a ChatML control token, e.g.
+    // "<|im_start|>function=bash>". At a function-open boundary inside a tool region this can only
+    // be an attempt at the tag, so accept the leaked marker plus an intact or bare "function=" open.
+    bool consume_function_open(std::size_t& pos) const {
+        if (consume(pos, kFunctionOpen)) { return true; }
+        std::size_t after_marker = pos;
+        if (starts_with_at(text_, after_marker, kChatmlStart)) {
+            after_marker += kChatmlStart.size();
+        } else if (starts_with_at(text_, after_marker, kChatmlEnd)) {
+            after_marker += kChatmlEnd.size();
+        } else {
+            return false;
+        }
+        if (!consume(after_marker, kFunctionOpen) && !consume(after_marker, kFunctionOpenBare)) {
+            return false;
+        }
+        pos = after_marker;
+        return true;
+    }
+
     FallbackReason parse_tool_call(std::size_t& pos, RawToolCall& call) const {
         if (!consume(pos, kToolOpen)) { return FallbackReason::MalformedStructure; }
         skip_format_whitespace(text_, pos);
@@ -632,7 +658,7 @@ private:
     }
 
     FallbackReason parse_function(std::size_t& pos, RawToolCall& call) const {
-        if (!consume(pos, kFunctionOpen)) { return FallbackReason::MalformedStructure; }
+        if (!consume_function_open(pos)) { return FallbackReason::MalformedStructure; }
         const std::size_t name_begin = pos;
         const std::size_t name_end   = text_.find('>', name_begin);
         if (name_end == std::string_view::npos || name_end == name_begin) {
