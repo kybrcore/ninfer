@@ -111,7 +111,14 @@ std::size_t py_strip_end(std::string_view text) {
 }
 
 std::pair<std::size_t, std::size_t> py_trim_bounds(std::string_view text) {
-    return {py_strip_begin(text), py_strip_end(text)};
+    const std::size_t begin = py_strip_begin(text);
+    const std::size_t end   = py_strip_end(text);
+    // Python's str.strip() of an all-whitespace string is empty. py_strip_begin returns the end
+    // of the text and py_strip_end returns zero in that case, so report the empty range instead
+    // of an inverted one: every caller uses text.substr(begin, end - begin) or
+    // slice_fragment(fragment, begin, end) and would otherwise throw or erase out of bounds.
+    if (begin > end) { return {0, 0}; }
+    return {begin, end};
 }
 
 std::size_t py_len(std::string_view text) {

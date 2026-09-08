@@ -36,6 +36,12 @@ int test_python_string_semantics() {
     const auto [begin, end] = fj::py_trim_bounds(padded);
     failures += check(padded.substr(begin, end - begin) == "x",
                       "py_trim_bounds strips Unicode whitespace");
+    const auto [empty_begin, empty_end] = fj::py_trim_bounds("   ");
+    failures += check(empty_begin == 0 && empty_end == 0,
+                      "py_trim_bounds collapses all-whitespace to the empty range");
+    const auto [wide_begin, wide_end] = fj::py_trim_bounds("\u00a0\u3000");
+    failures += check(wide_begin == 0 && wide_end == 0,
+                      "py_trim_bounds collapses Unicode all-whitespace to the empty range");
     failures += check(fj::py_isspace(0x7f) == false, "U+007F is not whitespace");
     failures += check(fj::py_isspace(0x20) && fj::py_isspace(0xa0) && fj::py_isspace(0x3000),
                       "Python whitespace set includes space, NBSP, ideographic space");
