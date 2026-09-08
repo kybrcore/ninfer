@@ -1,5 +1,6 @@
 #pragma once
 
+#include "targets/qwen3_6/impl/frontend/render_fragment.h"
 #include "targets/qwen3_6/impl/frontend/tokenizer.h"
 
 #include <ninfer/targets/qwen3_6/prepared_prompt.h>
@@ -29,28 +30,11 @@ enum class ChatPartKind {
     Video,
 };
 
-enum class Modality : std::uint8_t {
-    Image = 1,
-    Video = 2,
-};
-
-struct MediaPlaceholderByteSpec {
-    ByteSpan bytes;
-    Modality modality      = Modality::Image;
-    std::size_t item_index = 0;
-};
-
 struct MediaTokenRunByteSpec {
     ByteSpan bytes;
     Modality modality       = Modality::Image;
     std::size_t item_index  = 0;
     std::size_t frame_index = 0;
-};
-
-struct RenderedFragment {
-    std::string text;
-    std::vector<ByteSpan> literal_spans;
-    std::vector<MediaPlaceholderByteSpec> media_placeholders;
 };
 
 struct MediaData {
