@@ -47,7 +47,8 @@ ParsedToolCallOutput fallback(const std::string& text, ToolCallParseDiagnostics 
 // froggeric v22.5 JSON format: each <tool_call> block carries a single JSON object
 // {"name": ..., "arguments": ...}; consecutive blocks are separated by format whitespace.
 // The OpenAI wrapper {"function": {"name": ..., "arguments": ...}} is accepted and normalized
-// to the same call; the native shape wins when both are present.
+// to the same call; the native shape wins when both are present. A call without arguments
+// carries "{}" like the XML path rather than an empty string.
 ParsedToolCallOutput parse_json_tool_call_output(const std::string& text,
                                                  std::size_t max_tool_name_length,
                                                  const ToolCallOutputContract& contract) {
@@ -106,7 +107,8 @@ ParsedToolCallOutput parse_json_tool_call_output(const std::string& text,
             return fallback(text, out.diagnostics);
         }
         JsonCall call;
-        call.name = name.get_ref<const std::string&>();
+        call.name      = name.get_ref<const std::string&>();
+        call.arguments = "{}";
         if (call_object->contains("arguments")) {
             const Json& arguments = call_object->at("arguments");
             if (arguments.is_string()) {
