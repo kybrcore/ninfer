@@ -1,0 +1,11 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ],
+ "kwargs": {
+  "auto_disable_thinking_with_tools": true
+ }
+}

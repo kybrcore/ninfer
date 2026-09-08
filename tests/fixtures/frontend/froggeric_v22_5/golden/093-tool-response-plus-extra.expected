@@ -1,0 +1,20 @@
+<|im_start|>user
+q<|im_end|>
+<|im_start|>assistant
+<tool_call>
+<function=get_weather>
+<parameter=city>
+A
+</parameter>
+</function>
+</tool_call><|im_end|>
+<|im_start|>user
+<tool_response>ok</tool_response> and also this<|im_end|>
+<|im_start|>assistant
+<think>
+r1
+</think>
+
+b<|im_end|>
+<|im_start|>assistant
+<think>

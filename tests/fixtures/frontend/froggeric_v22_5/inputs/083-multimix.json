@@ -1,0 +1,27 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "a"
+    },
+    {
+     "type": "image"
+    },
+    {
+     "type": "text",
+     "text": "b"
+    },
+    {
+     "type": "video"
+    },
+    {
+     "type": "text",
+     "text": "c"
+    }
+   ]
+  }
+ ]
+}

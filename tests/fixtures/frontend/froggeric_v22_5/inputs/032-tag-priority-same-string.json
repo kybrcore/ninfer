@@ -1,0 +1,8 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "x <|think_off|> y <|think_on|> z"
+  }
+ ]
+}

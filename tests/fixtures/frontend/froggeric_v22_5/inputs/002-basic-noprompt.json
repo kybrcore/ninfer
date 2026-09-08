@@ -1,0 +1,11 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hello"
+  }
+ ],
+ "kwargs": {
+  "add_generation_prompt": false
+ }
+}

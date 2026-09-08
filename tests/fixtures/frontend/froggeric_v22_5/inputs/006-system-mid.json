@@ -1,0 +1,20 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": "A"
+  },
+  {
+   "role": "user",
+   "content": "u1"
+  },
+  {
+   "role": "system",
+   "content": "mid instruction"
+  },
+  {
+   "role": "user",
+   "content": "u2"
+  }
+ ]
+}
