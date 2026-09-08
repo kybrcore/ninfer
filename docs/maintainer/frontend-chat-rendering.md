@@ -185,6 +185,9 @@ sizes (<=100 KiB -> ~0.4 ms / ~1.8 MiB) is negligible next to prefill, so the pe
 and the measured bound is recorded in `froggeric_v22_5/tags.h`. A run-based map is the follow-up
 if multi-megabyte tagged prompts become a workload.
 
+The AutoDL Linux container (shared vCPU) reports the same allocation ratios and ~2-3x the wall
+time; the ratios, not the absolute microseconds, are the portable signal.
+
 ## 7. Known boundaries
 
 - Python numeric serialization is emulated for the shapes tool schemas actually use. Integers beyond
