@@ -19,6 +19,7 @@ for the selected tool.
 | Measure external Serve TTFT | [`bench/ttft/`](bench/ttft/README.md) |
 | Exercise a resident HTTP server | [`smoke/serve_contract.py`](smoke/serve_contract.py) |
 | Exercise thinking preservation through a managed server | [`smoke/serve_thinking_preservation.py`](smoke/serve_thinking_preservation.py) |
+| Verify the compiled froggeric v22.5 prompt oracle | [`oracle_froggeric_v22_5/`](oracle_froggeric_v22_5/README.md) |
 
 ## Artifact workflow
 

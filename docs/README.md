@@ -47,6 +47,7 @@ describe the delivered implementation.
 Runtime and Op references:
 
 - [Engine architecture, execution ownership, scheduling, and request lifecycles](maintainer/engine-architecture.md)
+- [Chat template rendering: artifact vs compiled froggeric v22.5, provenance, and parity testing](maintainer/frontend-chat-rendering.md)
 - [Resource scheduling, continuation/checkpoint, and Device/Host context-cache contracts](maintainer/resource-scheduling-and-context-cache.md)
 - [Paged KV context storage, ownership, and capacity model](maintainer/paged-kv-cache.md)
 - [Operational logging channels, ownership, format, levels, and data policy](maintainer/logging.md)
