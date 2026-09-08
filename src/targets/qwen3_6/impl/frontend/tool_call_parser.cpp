@@ -24,6 +24,10 @@ constexpr std::string_view kFunctionClose = "</function>";
 constexpr std::string_view kParamOpen     = "<parameter=";
 constexpr std::string_view kParamClose    = "</parameter>";
 
+// A model may quote "<tool_call>" in prose before the real call. Every occurrence is a candidate
+// region anchor, bounded to keep pathological payloads cheap.
+constexpr std::size_t kMaxAnchorCandidates = 64;
+
 struct RawParameter {
     std::string_view name;
     std::string_view value;
@@ -598,29 +602,55 @@ build_tool_call_output_contract(std::span<const std::string> tool_jsons, bool en
 ParsedToolCallOutput parse_qwen_tool_call_output(const std::string& text,
                                                  std::size_t max_tool_name_length,
                                                  const ToolCallOutputContract& contract) {
-    const std::size_t first = text.find(kToolOpen);
-    if (first == std::string::npos) { return fallback(text); }
+    // Anchor on every "<tool_call>" occurrence (bounded, right to left) and keep the left-most
+    // anchor whose suffix parses as a complete region. A model that quotes the marker in prose
+    // therefore no longer poisons the real call; the text before the chosen anchor becomes content.
+    std::vector<std::size_t> anchors;
+    std::size_t search = text.size();
+    while (anchors.size() < kMaxAnchorCandidates && search != 0) {
+        const std::size_t found = text.rfind(kToolOpen, search - 1);
+        if (found == std::string::npos) { break; }
+        anchors.push_back(found);
+        if (found == 0) { break; }
+        search = found;
+    }
+    if (anchors.empty()) { return fallback(text); }
 
-    ParsedToolCallOutput out;
-    out.content                 = rtrim_format_whitespace(std::string_view(text).substr(0, first));
-    out.diagnostics.marker_seen = true;
+    const std::string_view whole(text);
+    ParsedToolCallOutput best;
+    bool has_best                   = false;
+    FallbackReason leftmost_failure = FallbackReason::MalformedStructure;
 
-    std::vector<RawToolCall> raw_calls;
-    const std::string_view tool_region = std::string_view(text).substr(first);
-    const QwenToolRegionParser parser(tool_region, max_tool_name_length, contract);
-    const FallbackReason failure = parser.parse(raw_calls);
-    if (failure != FallbackReason::None) {
-        out.diagnostics.fallback_reason = failure;
-        return fallback(text, out.diagnostics);
+    for (const std::size_t anchor : anchors) {
+        std::vector<RawToolCall> raw_calls;
+        const QwenToolRegionParser parser(whole.substr(anchor), max_tool_name_length, contract);
+        const FallbackReason failure = parser.parse(raw_calls);
+        if (failure != FallbackReason::None) {
+            // Anchors are visited right to left, so the last recorded failure is the left-most one.
+            leftmost_failure = failure;
+            continue;
+        }
+
+        ParsedToolCallOutput candidate;
+        candidate.content                 = rtrim_format_whitespace(whole.substr(0, anchor));
+        candidate.diagnostics.marker_seen = true;
+        candidate.tool_calls.reserve(raw_calls.size());
+        for (const RawToolCall& raw : raw_calls) {
+            candidate.tool_calls.push_back(
+                normalize_raw_tool_call(raw, contract, candidate.diagnostics));
+        }
+        candidate.diagnostics.structured_call_count =
+            static_cast<std::uint32_t>(candidate.tool_calls.size());
+        candidate.is_tool_call_response = true;
+        best                            = std::move(candidate);
+        has_best                        = true;
     }
 
-    out.tool_calls.reserve(raw_calls.size());
-    for (const RawToolCall& raw : raw_calls) {
-        out.tool_calls.push_back(normalize_raw_tool_call(raw, contract, out.diagnostics));
-    }
+    if (has_best) { return best; }
 
-    out.diagnostics.structured_call_count = static_cast<std::uint32_t>(out.tool_calls.size());
-    out.is_tool_call_response             = true;
+    ParsedToolCallOutput out        = fallback(text);
+    out.diagnostics.marker_seen     = true;
+    out.diagnostics.fallback_reason = leftmost_failure;
     return out;
 }
 
@@ -684,7 +714,9 @@ ToolCallOutputDecoder::Terminal ToolCallOutputDecoder::finish() {
         trailing_whitespace_.clear();
         tool_region_.clear();
         marker_prefix_bytes_ = 0;
-        return Terminal{.content     = {},
+        // Prose between the first marker and the chosen anchor was buffered in tool_region_;
+        // publish it now (after the calls, which is an accepted streaming downgrade).
+        return Terminal{.content     = std::move(parsed.content),
                         .tool_calls  = std::move(parsed.tool_calls),
                         .diagnostics = parsed.diagnostics};
     }

@@ -119,7 +119,7 @@ int test_basic_legacy_parsing() {
 int test_multiple_calls() {
     const std::string text = tool_call("first", {{"payload", "{\"ok\":true,\"items\":[1,2]}"}}) +
                              "\n" + tool_call("second", {{"value", "plain text"}});
-    const auto parsed = fi::parse_qwen_tool_call_output(text, 64, kLegacyContract);
+    const auto parsed      = fi::parse_qwen_tool_call_output(text, 64, kLegacyContract);
 
     int failures = 0;
     failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 2,
@@ -227,6 +227,70 @@ int test_unrepresentable_parameter_delimiters_fall_back() {
     failures += check_rejected(standalone_close, contract,
                                ninfer::ToolCallParseFallbackReason::MalformedStructure,
                                "standalone parameter close was guessed to be string content");
+    return failures;
+}
+
+int check_decoder_chunk_independent(const fi::ToolCallOutputContract& contract,
+                                    const std::string& text, std::string_view message) {
+    auto shared = std::make_shared<fi::ToolCallOutputContract>(contract);
+    std::string reference;
+    bool stable = true;
+    for (std::size_t split = 0; split <= text.size(); ++split) {
+        fi::ToolCallOutputDecoder decoder(shared, 64);
+        std::string visible = decoder.feed(std::string_view(text).substr(0, split));
+        visible += decoder.feed(std::string_view(text).substr(split));
+        const auto terminal   = decoder.finish();
+        std::string signature = visible + "|" + terminal.content;
+        for (const auto& call : terminal.tool_calls) {
+            signature += "|" + call.name + ":" + call.arguments_json;
+        }
+        if (split == 0) {
+            reference = signature;
+        } else if (signature != reference) {
+            stable = false;
+            break;
+        }
+    }
+    return check(stable, std::string(message));
+}
+
+int test_xml_candidate_anchor() {
+    const auto contract = contract_for("bash", Json{{"command", Json{{"type", "string"}}}});
+
+    int failures             = 0;
+    const std::string prose  = "You saw the raw `<tool_call>` block. Here is the real call:\n";
+    const std::string quoted = prose + tool_call("bash", {{"command", "ls -la"}});
+    const auto parsed        = fi::parse_qwen_tool_call_output(quoted, 64, contract);
+    failures +=
+        check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
+                  parsed.content == "You saw the raw `<tool_call>` block. Here is the real call:" &&
+                  Json::parse(parsed.tool_calls.front().arguments_json).at("command") == "ls -la",
+              "quoted tool-call marker before the real call was not skipped");
+    failures += check_decoder_chunk_independent(contract, quoted,
+                                                "quoted-marker decoding depends on chunking");
+
+    const std::string many = "First `<tool_call>`, again `<tool_call>`, and once more "
+                             "`<tool_call>`:\n" +
+                             tool_call("bash", {{"command", "pwd"}});
+    const auto many_parsed = fi::parse_qwen_tool_call_output(many, 64, contract);
+    failures +=
+        check(many_parsed.is_tool_call_response && many_parsed.tool_calls.size() == 1 &&
+                  Json::parse(many_parsed.tool_calls.front().arguments_json).at("command") == "pwd",
+              "multiple quoted markers before the real call were not skipped");
+
+    const std::string mention = "Just a mention of `<tool_call>` in prose.";
+    failures +=
+        check_rejected(mention, contract, ninfer::ToolCallParseFallbackReason::MalformedStructure,
+                       "a marker without a call must still fall back");
+
+    const std::string separated = tool_call("bash", {{"command", "first"}}) + "\nand also\n" +
+                                  tool_call("bash", {{"command", "second"}});
+    const auto separated_parsed = fi::parse_qwen_tool_call_output(separated, 64, contract);
+    failures +=
+        check(separated_parsed.is_tool_call_response && separated_parsed.tool_calls.size() == 1 &&
+                  Json::parse(separated_parsed.tool_calls.front().arguments_json).at("command") ==
+                      "second",
+              "prose between two calls did not select the trailing call");
     return failures;
 }
 
@@ -742,6 +806,7 @@ int main() {
     failures += test_declared_strings_preserve_text();
     failures += test_string_values_preserve_embedded_tool_markup();
     failures += test_unrepresentable_parameter_delimiters_fall_back();
+    failures += test_xml_candidate_anchor();
     failures += test_declared_json_types();
     failures += test_boolean_boundary();
     failures += test_exact_integer_boundary();
