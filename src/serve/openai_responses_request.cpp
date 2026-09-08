@@ -992,10 +992,10 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
             iterator.key() == "auto_disable_thinking_with_tools" ||
             iterator.key() == "tool_call_format" || iterator.key() == "max_tool_arg_chars" ||
             iterator.key() == "max_tool_response_chars";
-        const bool accepted =
-            (is_base || is_v225) &&
-            (iterator.value().is_null() || is_base ||
-             chat_style == ninfer::ChatStyle::FroggericV225);
+        // Null values are neutral: accepted for unknown keys (matching the pre-existing
+        // behavior) and for known keys alike; only non-null values are validated.
+        const bool accepted = iterator.value().is_null() || is_base ||
+                              (is_v225 && chat_style == ninfer::ChatStyle::FroggericV225);
         if (!accepted) {
             if (is_v225 && !iterator.value().is_null()) {
                 bad_request("chat_template_kwargs." + iterator.key() +
