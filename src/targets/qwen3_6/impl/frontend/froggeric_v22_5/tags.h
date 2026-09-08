@@ -1,6 +1,6 @@
 #pragma once
 
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_python.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/python.h"
 #include "targets/qwen3_6/impl/frontend/render_fragment.h"
 
 #include <algorithm>

@@ -31,7 +31,7 @@
 // input; NINFER_FROGGERIC_PROP_CASES (default 500) controls the iteration count.
 
 #include "targets/qwen3_6/impl/frontend/chat_template.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_tags.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/tags.h"
 
 #include <algorithm>
 #include <cstddef>

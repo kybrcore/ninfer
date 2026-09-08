@@ -34,7 +34,7 @@ the serve layer only accepts them under `froggeric-v22.5`.
 
 `src/targets/qwen3_6/impl/frontend/render_fragment.h` is the single provenance contract used by
 both the artifact renderer (`chat_template.cpp`) and the compiled renderer
-(`froggeric_v22_5_renderer.cpp`):
+(`froggeric_v22_5/renderer.cpp`):
 
 ```cpp
 struct RenderedFragment {
@@ -68,21 +68,22 @@ context cache, and rewrite machinery see one contract.
 
 | File | Responsibility |
 |---|---|
-| `froggeric_v22_5_prompts.h` | Pinned tool and reasoning instruction texts |
-| `froggeric_v22_5_python.{h,cpp}` | Python string semantics and `|tojson` parity |
-| `froggeric_v22_5_tags.{h,cpp}` | Inline-tag pre-scan and concatenated-render stripping with an offset map |
-| `froggeric_v22_5_think.{h,cpp}` | Assistant think-block extraction |
-| `froggeric_v22_5_renderer.cpp` | Orchestration, per-role handlers, metadata resolution |
+| `froggeric_v22_5/prompts.h` | Pinned tool and reasoning instruction texts |
+| `froggeric_v22_5/python.{h,cpp}` | Python string semantics and `|tojson` parity |
+| `froggeric_v22_5/tags.{h,cpp}` | Inline-tag pre-scan and concatenated-render stripping with an offset map |
+| `froggeric_v22_5/think.{h,cpp}` | Assistant think-block extraction |
+| `froggeric_v22_5/renderer.cpp` | Orchestration, per-role handlers, metadata resolution |
+| `froggeric_v22_5/CMakeLists.txt` | Own source list; the parent adds one `add_subdirectory` line |
 | `render_fragment.{h,cpp}` | Shared provenance contract (section 2) |
 
 Two rules keep this layer honest:
 
-1. **Instruction text lives only in `froggeric_v22_5_prompts.h`.** `tools/oracle_froggeric_v22_5/oracle.py
+1. **Instruction text lives only in `froggeric_v22_5/prompts.h`.** `tools/oracle_froggeric_v22_5/oracle.py
    check` re-renders the pinned template for the four tool-instruction combinations
    (XML/JSON × thinking on/off) and the low/xhigh reasoning instructions, and compares the exact
    bytes with those constants. Hand-copied instruction text is a defect even if the goldens happen
    to pass.
-2. **Python semantics live only in `froggeric_v22_5_python.{h,cpp}`.** New semantics need a direct
+2. **Python semantics live only in `froggeric_v22_5/python.{h,cpp}`.** New semantics need a direct
    unit test in `tests/targets/qwen3_6/test_froggeric_v22_5_helpers.cpp` before they are used by
    the renderer; the end-to-end fixtures alone are not enough to localize a helper regression.
 
@@ -173,7 +174,7 @@ artifact renderer shares the fragment contract but not the v22.5 semantics.
 |---|---|
 | `FIXTURE DRIFT` from the parity test | `chat_template.jinja` or `chat_template_oneline.txt` bytes changed; re-fetch the pinned revision, never edit fixtures in place |
 | `frozen oracle requires jinja2 3.1.6` / Python 3.11 | the oracle venv is not the pinned one; recreate it from `tools/oracle_froggeric_v22_5/requirements.txt` |
-| `FAIL kXmlInstructions… differs from the pinned template` | instruction text in `froggeric_v22_5_prompts.h` drifted from the template; fix the constant, do not update the checker |
+| `FAIL kXmlInstructions… differs from the pinned template` | instruction text in `froggeric_v22_5/prompts.h` drifted from the template; fix the constant, do not update the checker |
 | `chat media count does not match rendered placeholders` | a renderer branch emitted placeholder text without publishing `media_placeholders`; check every path that appends content |
 | `rendered fragment slice intersects a media placeholder` | a slice (think extraction, tool-response truncation) cut the pad token; adjust the boundary or reject the option |
 | A tag or think marker renders differently from the oracle | run `ninfer_qwen3_6_froggeric_v22_5_helpers_test` first to localize the helper, then `oracle.py check` |

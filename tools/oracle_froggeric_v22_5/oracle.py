@@ -108,11 +108,11 @@ def check_prompt_constants(templates):
 
     The renderer must never hand-copy instruction text: this re-renders the template for the
     four tool-instruction combinations plus the low/xhigh reasoning instructions and compares
-    the exact bytes with the constants in froggeric_v22_5_prompts.h.
+    the exact bytes with the constants in froggeric_v22_5/prompts.h.
     """
     repo = os.path.abspath(os.path.join(FIXTURE_DIR, '..', '..', '..', '..'))
     header_path = os.path.join(repo, 'src', 'targets', 'qwen3_6', 'impl', 'frontend',
-                               'froggeric_v22_5_prompts.h')
+                               'froggeric_v22_5', 'prompts.h')
     with open(header_path, 'r', encoding='utf-8') as fh:
         header = fh.read()
 
