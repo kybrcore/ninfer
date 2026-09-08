@@ -439,6 +439,47 @@ w('144-user-resets-failures', {'messages': [
     {'role': 'tool', 'content': 'Error: two'}],
     'tools': [TOOL]})
 
+# ---------------- renderer parity regressions ----------------
+# Multiple close markers: jinja uses split(marker)[0] for reasoning and split(marker)[-1]
+# for the body, so the LAST close marker delimits the body.
+w('160-think-multi-close-explicit', {'messages': [
+    {'role': 'user', 'content': 'q'},
+    {'role': 'assistant', 'content': '<think>x</think>mid</think>tail',
+     'reasoning_content': 'r'}]})
+w('161-think-multi-close-content', {'messages': [
+    {'role': 'user', 'content': 'q'},
+    {'role': 'assistant', 'content': 'a\n</think>b\n</think>c'}]})
+# Inline tags are stripped from the concatenated render, so a tag may span two parts and
+# part-boundary whitespace must survive exactly as the oracle renders it.
+w('162-tag-multipart-whitespace', {'messages': [
+    {'role': 'user', 'content': [
+        {'type': 'text', 'text': '<|think_off|>a '},
+        {'type': 'text', 'text': ' b'}]}]})
+w('163-tag-split-across-parts', {'messages': [
+    {'role': 'user', 'content': [
+        {'type': 'text', 'text': '<|think_'},
+        {'type': 'text', 'text': 'off|>abc'}]}]})
+# tojson parity: Python json.dumps(ensure_ascii=True) escapes C0 controls and DEL.
+w('164-tojson-del-escape', {'messages': [
+    {'role': 'user', 'content': 'q'},
+    {'role': 'assistant', 'content': '', 'tool_calls': [
+        {'function': {'name': 'f', 'arguments': {
+            's': ''.join(chr(i) for i in range(0x20)) + chr(0x7f) + '~ \u00e9\U0001F600'}}}]}],
+    'tools': [TOOL], 'kwargs': {'tool_call_format': 'json'}})
+# Media placeholders in assistant and tool history must keep their rendered bytes and their
+# placeholder metadata (the compiled renderer slices the rendered block, not a plain string).
+w('165-assistant-media', {'messages': [
+    {'role': 'user', 'content': 'hi'},
+    {'role': 'assistant', 'content': [{'type': 'text', 'text': 'see '}, {'type': 'image'}]},
+    {'role': 'user', 'content': [{'type': 'image'}, {'type': 'text', 'text': 'now'}]}],
+    'kwargs': {'add_vision_id': True}})
+w('166-tool-media', {'messages': [
+    {'role': 'user', 'content': 'capture'},
+    {'role': 'assistant', 'content': '',
+     'tool_calls': tc(function={'name': 'f', 'arguments': {}})},
+    {'role': 'tool', 'content': [{'type': 'text', 'text': 'captured '}, {'type': 'image'}]}],
+    'tools': [TOOL]})
+
 # ---------------- long multi-step (>50 messages) ----------------
 def long_tool_loop(n):
     msgs = [{'role': 'user', 'content': 'q'}]
