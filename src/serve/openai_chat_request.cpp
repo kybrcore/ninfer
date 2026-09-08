@@ -929,15 +929,16 @@ OpenAIChatRequest parse_chat_completion_request(const Json& body, const RequestL
     const TemplateOptions template_options = parse_template_options(body, limits.chat_style);
     output.generation.enable_thinking      = template_options.enable_thinking;
     output.generation.preserve_thinking    = template_options.preserve_thinking;
-    output.generation.preserve_reasoning   = template_options.froggeric_v225.preserve_reasoning;
-    output.generation.auto_disable_thinking_with_tools =
+    output.generation.froggeric_v225.preserve_reasoning =
+        template_options.froggeric_v225.preserve_reasoning;
+    output.generation.froggeric_v225.auto_disable_thinking_with_tools =
         template_options.froggeric_v225.auto_disable_thinking_with_tools.value_or(false);
     if (template_options.froggeric_v225.json_tool_format) {
-        output.generation.tool_call_format = ninfer::ToolCallFormat::Json;
+        output.generation.froggeric_v225.tool_call_format = ninfer::ToolCallFormat::Json;
     }
-    output.generation.max_tool_arg_chars =
+    output.generation.froggeric_v225.max_tool_arg_chars =
         template_options.froggeric_v225.max_tool_arg_chars.value_or(0);
-    output.generation.max_tool_response_chars =
+    output.generation.froggeric_v225.max_tool_response_chars =
         template_options.froggeric_v225.max_tool_response_chars.value_or(0);
     apply_openai_prompt_cache_policy(output.generation, cache_policy);
     return output;

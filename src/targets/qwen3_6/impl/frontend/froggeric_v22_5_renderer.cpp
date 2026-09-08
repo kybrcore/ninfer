@@ -182,13 +182,14 @@ void resolve_render_state(const std::vector<ChatMessage>& messages, RenderState&
     state.has_tools = !state.options.tool_jsons.empty();
     state.thinking  = state.options.enable_thinking;
     state.effort    = state.options.reasoning_effort.value_or(ReasoningEffort::Medium);
-    if (state.options.auto_disable_thinking_with_tools && state.has_tools) {
+    if (state.options.froggeric_v225.auto_disable_thinking_with_tools && state.has_tools) {
         state.thinking = false;
     }
     state.preserve_thinking =
-        state.options.preserve_reasoning.has_value() ? *state.options.preserve_reasoning
-        : state.options.preserve_thinking.has_value() ? *state.options.preserve_thinking
-                                                     : true;
+        state.options.froggeric_v225.preserve_reasoning.has_value()
+            ? *state.options.froggeric_v225.preserve_reasoning
+            : state.options.preserve_thinking.has_value() ? *state.options.preserve_thinking
+                                                          : true;
 
     // Pre-scan for inline tags (system/developer/user text parts, in order).
     for (const ChatMessage& message : messages) {
@@ -292,7 +293,7 @@ void render_system_block(RenderState& state) {
         }
         state.out.append_template("\n</tools>");
         state.out.append_template(
-            state.options.tool_call_format == ToolCallFormat::Json
+            state.options.froggeric_v225.tool_call_format == ToolCallFormat::Json
                 ? (state.thinking ? kJsonInstructionsThinking : kJsonInstructionsOff)
                 : (state.thinking ? kXmlInstructionsThinking : kXmlInstructionsOff));
         if (!state.merged_leading.empty()) {
@@ -322,7 +323,7 @@ void render_system_block(RenderState& state) {
 }
 
 void render_tool_call(RenderState& state, const ToolCall& call, bool first, bool body_has_text) {
-    if (state.options.tool_call_format == ToolCallFormat::Json) {
+    if (state.options.froggeric_v225.tool_call_format == ToolCallFormat::Json) {
         if (first) {
             if (body_has_text) { state.out.append_template("\n\n"); }
         } else {
@@ -379,9 +380,10 @@ void render_tool_call(RenderState& state, const ToolCall& call, bool first, bool
         state.out.append_template(">\n");
         const std::string value_text = param_value.is_string() ? param_value.get<std::string>()
                                                                : tojson_oracle(param_value);
-        if (state.options.max_tool_arg_chars > 0 &&
-            py_len(value_text) > state.options.max_tool_arg_chars) {
-            state.out.append_literal(truncate_python(value_text, state.options.max_tool_arg_chars));
+        if (state.options.froggeric_v225.max_tool_arg_chars > 0 &&
+            py_len(value_text) > state.options.froggeric_v225.max_tool_arg_chars) {
+            state.out.append_literal(
+                truncate_python(value_text, state.options.froggeric_v225.max_tool_arg_chars));
         } else {
             state.out.append_literal(value_text);
         }
@@ -467,15 +469,17 @@ void render_tool(const std::vector<ChatMessage>& messages, RenderState& state, s
 
     if (!state.prev_was_tool) { state.out.append_template("<|im_start|>user"); }
     const bool is_json_payload =
-        state.options.tool_call_format == ToolCallFormat::Json && !content.fragment.text.empty() &&
+        state.options.froggeric_v225.tool_call_format == ToolCallFormat::Json &&
+        !content.fragment.text.empty() &&
         (content.fragment.text.front() == '{' || content.fragment.text.front() == '[');
     const bool truncate =
-        !is_json_payload && state.options.max_tool_response_chars > 0 &&
-        py_len(content.fragment.text) > state.options.max_tool_response_chars;
+        !is_json_payload && state.options.froggeric_v225.max_tool_response_chars > 0 &&
+        py_len(content.fragment.text) > state.options.froggeric_v225.max_tool_response_chars;
     state.out.append_template("\n<tool_response>\n");
     if (truncate) {
         const std::size_t keep =
-            py_prefix_bytes(content.fragment.text, state.options.max_tool_response_chars);
+            py_prefix_bytes(content.fragment.text,
+                            state.options.froggeric_v225.max_tool_response_chars);
         for (const MediaPlaceholderByteSpec& placeholder : content.fragment.media_placeholders) {
             if (placeholder.bytes.end > keep) {
                 throw std::invalid_argument(
