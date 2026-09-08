@@ -1,0 +1,26 @@
+{
+ "messages": [
+  {
+   "role": "assistant",
+   "content": "a0",
+   "reasoning_content": "r0"
+  },
+  {
+   "role": "assistant",
+   "content": "a1",
+   "reasoning_content": "r1"
+  },
+  {
+   "role": "user",
+   "content": "<tool_response>{\"ok\":true}</tool_response>"
+  },
+  {
+   "role": "assistant",
+   "content": "a2",
+   "reasoning_content": "r2"
+  }
+ ],
+ "kwargs": {
+  "preserve_thinking": false
+ }
+}
