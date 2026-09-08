@@ -441,7 +441,7 @@ struct ThinkExtraction {
 
 // jinja split(marker)[0] / split(marker)[-1] use the FIRST occurrence.
 ThinkExtraction extract_think(const std::string& explicit_reasoning, std::string body) {
-    ThinkExtraction out{explicit_reasoning, std::move(body)};
+    ThinkExtraction out{explicit_reasoning, body};
     if (!out.reasoning.empty()) {
         std::string_view lead_end;
         if (body.rfind("<think>", 0) == 0 && body.find("</think>") != std::string::npos) {
