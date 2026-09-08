@@ -159,8 +159,19 @@ ResolvedPromptSemantics resolve_prompt_semantics(const GenerationRequest& reques
         result.reasoning_effort = ninfer::ReasoningEffort::XHigh;
         break;
     case RequestedReasoningEffort::Minimal:
+        // The froggeric v22.5 template maps the API minimal alias to its low effort.
+        if (server.chat_style == ninfer::ChatStyle::FroggericV225) {
+            result.reasoning_effort = ninfer::ReasoningEffort::Low;
+            break;
+        }
+        [[fallthrough]];
     case RequestedReasoningEffort::High:
     case RequestedReasoningEffort::Max:
+        // The froggeric v22.5 template maps the API high/max aliases to xhigh.
+        if (server.chat_style == ninfer::ChatStyle::FroggericV225) {
+            result.reasoning_effort = ninfer::ReasoningEffort::XHigh;
+            break;
+        }
         invalid_prompt_option("reasoning effort '" +
                                   std::string(requested_reasoning_effort_name(requested)) +
                                   "' is not supported by the loaded chat template",
@@ -273,6 +284,13 @@ ninfer::PromptInput to_prompt_input(const GenerationRequest& request,
     input.options.reasoning_effort                 = semantics.reasoning_effort;
     input.options.preserve_thinking                = semantics.preserve_thinking;
     input.options.add_vision_id                    = false;
+    // Froggeric v22.5 request options. The artifact renderer ignores them; the parser only
+    // accepts them under the froggeric-v22.5 style.
+    input.options.preserve_reasoning               = request.preserve_reasoning;
+    input.options.auto_disable_thinking_with_tools = request.auto_disable_thinking_with_tools;
+    input.options.tool_call_format                 = request.tool_call_format;
+    input.options.max_tool_arg_chars               = request.max_tool_arg_chars;
+    input.options.max_tool_response_chars          = request.max_tool_response_chars;
     const std::vector<const ToolDefinition*> tools = effective_tools(request);
     input.options.tool_jsons.reserve(tools.size());
     for (std::size_t index = 0; index < tools.size(); ++index) {

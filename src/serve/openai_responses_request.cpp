@@ -970,7 +970,8 @@ void parse_text(const Json& body) {
     }
 }
 
-void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out) {
+void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out,
+                             ninfer::ChatStyle chat_style) {
     if (body.contains("preserve_thinking") && !body.at("preserve_thinking").is_null()) {
         if (!body.at("preserve_thinking").is_boolean()) {
             bad_request("preserve_thinking must be a boolean or null", "preserve_thinking");
@@ -985,9 +986,77 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
         bad_request("chat_template_kwargs must be an object", "chat_template_kwargs");
     }
     for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
-        if (iterator.key() != "preserve_thinking" && !iterator.value().is_null()) {
+        const bool is_base = iterator.key() == "preserve_thinking";
+        const bool is_v225 =
+            iterator.key() == "preserve_reasoning" ||
+            iterator.key() == "auto_disable_thinking_with_tools" ||
+            iterator.key() == "tool_call_format" || iterator.key() == "max_tool_arg_chars" ||
+            iterator.key() == "max_tool_response_chars";
+        const bool accepted =
+            (is_base || is_v225) &&
+            (iterator.value().is_null() || is_base ||
+             chat_style == ninfer::ChatStyle::FroggericV225);
+        if (!accepted) {
+            if (is_v225 && !iterator.value().is_null()) {
+                bad_request("chat_template_kwargs." + iterator.key() +
+                                " is only supported with --chat-style froggeric-v22.5",
+                            "chat_template_kwargs", "chat_template_option_not_supported");
+            }
             bad_request("chat_template_kwargs." + iterator.key() + " is not supported",
                         "chat_template_kwargs", "chat_template_option_not_supported");
+        }
+    }
+    if (chat_style == ninfer::ChatStyle::FroggericV225) {
+        if (kwargs.contains("preserve_reasoning") &&
+            !kwargs.at("preserve_reasoning").is_null()) {
+            if (!kwargs.at("preserve_reasoning").is_boolean()) {
+                bad_request("chat_template_kwargs.preserve_reasoning must be a boolean or null",
+                            "chat_template_kwargs");
+            }
+            out.generation.preserve_reasoning = kwargs.at("preserve_reasoning").get<bool>();
+        }
+        if (kwargs.contains("auto_disable_thinking_with_tools") &&
+            !kwargs.at("auto_disable_thinking_with_tools").is_null()) {
+            if (!kwargs.at("auto_disable_thinking_with_tools").is_boolean()) {
+                bad_request(
+                    "chat_template_kwargs.auto_disable_thinking_with_tools must be a boolean",
+                    "chat_template_kwargs");
+            }
+            out.generation.auto_disable_thinking_with_tools =
+                kwargs.at("auto_disable_thinking_with_tools").get<bool>();
+        }
+        if (kwargs.contains("tool_call_format") && !kwargs.at("tool_call_format").is_null()) {
+            const Json& format = kwargs.at("tool_call_format");
+            if (!format.is_string()) {
+                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
+                            "chat_template_kwargs");
+            }
+            const std::string value = format.get<std::string>();
+            if (value == "json") {
+                out.generation.tool_call_format = ninfer::ToolCallFormat::Json;
+            } else if (value != "xml") {
+                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
+                            "chat_template_kwargs");
+            }
+        }
+        for (const char* key : {"max_tool_arg_chars", "max_tool_response_chars"}) {
+            if (!kwargs.contains(key) || kwargs.at(key).is_null()) { continue; }
+            const Json& value = kwargs.at(key);
+            if (!value.is_number_unsigned()) {
+                bad_request(std::string("chat_template_kwargs.") + key +
+                                " must be a non-negative integer",
+                            "chat_template_kwargs");
+            }
+            const std::uint64_t parsed = value.get<std::uint64_t>();
+            if (parsed > std::numeric_limits<std::uint32_t>::max()) {
+                bad_request(std::string("chat_template_kwargs.") + key + " exceeds uint32",
+                            "chat_template_kwargs");
+            }
+            if (std::string(key) == "max_tool_arg_chars") {
+                out.generation.max_tool_arg_chars = static_cast<std::uint32_t>(parsed);
+            } else {
+                out.generation.max_tool_response_chars = static_cast<std::uint32_t>(parsed);
+            }
         }
     }
     if (!kwargs.contains("preserve_thinking") || kwargs.at("preserve_thinking").is_null()) {
@@ -1003,6 +1072,11 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
                     "conflicting_template_option");
     }
     out.generation.preserve_thinking = nested;
+    if (out.generation.preserve_reasoning && *out.generation.preserve_reasoning !=
+            *out.generation.preserve_thinking) {
+        bad_request("conflicting preserve_reasoning and preserve_thinking values",
+                    "chat_template_kwargs", "conflicting_template_option");
+    }
 }
 
 void parse_truncation(const Json& body) {
@@ -1051,7 +1125,7 @@ ParsedPromptFields parse_prompt_fields(const Json& body, const RequestLimits& li
     parse_reasoning(body, out.prompt);
     parse_text(body);
     parse_truncation(body);
-    parse_preserve_thinking(body, out.prompt);
+    parse_preserve_thinking(body, out.prompt, limits.chat_style);
     out.prompt.generation.max_tokens = limits.default_max_tokens;
     return out;
 }
