@@ -97,11 +97,7 @@ struct ChatRenderOptions {
     std::vector<PromptCacheMarker> cache_markers;
     // Froggeric v22.5 request options. The Artifact renderer ignores them; the v22.5 renderer
     // consumes them with the template's default/alias semantics.
-    std::optional<bool> preserve_reasoning;
-    bool auto_disable_thinking_with_tools = false;
-    ToolCallFormat tool_call_format       = ToolCallFormat::Xml;
-    std::uint32_t max_tool_arg_chars      = 0;
-    std::uint32_t max_tool_response_chars = 0;
+    FroggericV225Options froggeric_v225;
 };
 
 struct RewriteCheckpointByteSpec {

@@ -340,11 +340,7 @@ fi::ChatRenderOptions render_options(const PromptOptions& options,
                                    .tool_jsons        = options.tool_jsons};
     rendered.cache_markers.assign(cache_markers.begin(), cache_markers.end());
     // Froggeric v22.5 request options; the Artifact renderer ignores them.
-    rendered.preserve_reasoning               = options.preserve_reasoning;
-    rendered.auto_disable_thinking_with_tools = options.auto_disable_thinking_with_tools;
-    rendered.tool_call_format                 = options.tool_call_format;
-    rendered.max_tool_arg_chars               = options.max_tool_arg_chars;
-    rendered.max_tool_response_chars          = options.max_tool_response_chars;
+    rendered.froggeric_v225 = options.froggeric_v225;
     return rendered;
 }
 
@@ -1415,7 +1411,7 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
     for (const ChatMessage& message : input.messages) { message_roles.push_back(message.role); }
     const auto tool_call_output =
         fi::build_tool_call_output_contract(options.tool_jsons, !options.tool_jsons.empty(),
-                                            options.tool_call_format ==
+                                            options.froggeric_v225.tool_call_format ==
                                                 ninfer::ToolCallFormat::Json);
     const std::optional<std::uint32_t> leading_boundary =
         leading_instruction_boundary(message_roles);

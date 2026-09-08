@@ -284,15 +284,15 @@ Case generate(Rng& rng) {
     case 1: out.options.preserve_thinking = true; break;
     default: out.options.preserve_thinking = false; break;
     }
-    if (rng.chance(15)) { out.options.preserve_reasoning = rng.chance(50); }
+    if (rng.chance(15)) { out.options.froggeric_v225.preserve_reasoning = rng.chance(50); }
     switch (rng.below(4)) {
     case 0: break; // template default (medium)
     case 1: out.options.reasoning_effort = ninfer::ReasoningEffort::Low; break;
     case 2: out.options.reasoning_effort = ninfer::ReasoningEffort::Medium; break;
     default: out.options.reasoning_effort = ninfer::ReasoningEffort::XHigh; break;
     }
-    out.options.auto_disable_thinking_with_tools = rng.chance(15);
-    out.options.tool_call_format =
+    out.options.froggeric_v225.auto_disable_thinking_with_tools = rng.chance(15);
+    out.options.froggeric_v225.tool_call_format =
         rng.chance(25) ? ninfer::ToolCallFormat::Json : ninfer::ToolCallFormat::Xml;
     out.options.add_generation_prompt = rng.chance(80);
 
@@ -364,11 +364,15 @@ Case generate(Rng& rng) {
     // A truncation cap that crosses a media placeholder is an explicit invalid_argument. Keep
     // those cases out of the property surface; the oracle fixtures cover the error paths.
     if (message_has_media(out.messages)) {
-        out.options.max_tool_arg_chars      = 0;
-        out.options.max_tool_response_chars = 0;
+        out.options.froggeric_v225.max_tool_arg_chars      = 0;
+        out.options.froggeric_v225.max_tool_response_chars = 0;
     } else {
-        if (rng.chance(30)) { out.options.max_tool_arg_chars = 1 + rng.below(30); }
-        if (rng.chance(30)) { out.options.max_tool_response_chars = 1 + rng.below(30); }
+        if (rng.chance(30)) {
+            out.options.froggeric_v225.max_tool_arg_chars = 1 + rng.below(30);
+        }
+        if (rng.chance(30)) {
+            out.options.froggeric_v225.max_tool_response_chars = 1 + rng.below(30);
+        }
     }
     return out;
 }
@@ -503,22 +507,26 @@ std::string describe(const Case& value) {
         }
     }
     out += "] opts{think=" + std::to_string(value.options.enable_thinking ? 1 : 0);
-    out += std::string(" preserve=") +
-           (value.options.preserve_reasoning
-                ? (value.options.preserve_reasoning.value() ? "reasoning:1" : "reasoning:0")
-                : value.options.preserve_thinking
-                      ? (value.options.preserve_thinking.value() ? "1" : "0")
-                      : "default");
+    const char* preserve = "default";
+    if (value.options.froggeric_v225.preserve_reasoning) {
+        preserve = *value.options.froggeric_v225.preserve_reasoning ? "reasoning:1" : "reasoning:0";
+    } else if (value.options.preserve_thinking) {
+        preserve = *value.options.preserve_thinking ? "1" : "0";
+    }
+    out += std::string(" preserve=") + preserve;
     out += " effort=" +
            (value.options.reasoning_effort
                 ? std::to_string(static_cast<int>(*value.options.reasoning_effort))
                 : std::string("default"));
-    out += " auto=" + std::to_string(value.options.auto_disable_thinking_with_tools ? 1 : 0);
-    out += " fmt=" + std::string(value.options.tool_call_format == ninfer::ToolCallFormat::Json
-                                     ? "json"
-                                     : "xml");
-    out += " arg=" + std::to_string(value.options.max_tool_arg_chars);
-    out += " resp=" + std::to_string(value.options.max_tool_response_chars);
+    out += " auto=" +
+           std::to_string(value.options.froggeric_v225.auto_disable_thinking_with_tools ? 1 : 0);
+    out += " fmt=" +
+           std::string(value.options.froggeric_v225.tool_call_format ==
+                               ninfer::ToolCallFormat::Json
+                           ? "json"
+                           : "xml");
+    out += " arg=" + std::to_string(value.options.froggeric_v225.max_tool_arg_chars);
+    out += " resp=" + std::to_string(value.options.froggeric_v225.max_tool_response_chars);
     out += " gen=" + std::to_string(value.options.add_generation_prompt ? 1 : 0);
     out += " tools=" + std::to_string(value.options.tool_jsons.size());
     out += " markers=" + std::to_string(value.options.cache_markers.size());
@@ -619,8 +627,8 @@ std::optional<std::string> check_generation_state(const Case& value,
 
 std::optional<std::string> check_prefix_extension(const Case& value,
                                                   const fj::CompiledChatTemplate& renderer) {
-    const bool preserve = value.options.preserve_reasoning
-                              ? *value.options.preserve_reasoning
+    const bool preserve = value.options.froggeric_v225.preserve_reasoning
+                              ? *value.options.froggeric_v225.preserve_reasoning
                               : value.options.preserve_thinking.value_or(true);
     if (!preserve || !value.options.add_generation_prompt ||
         value.options.continuation != ninfer::PromptContinuationMode::NewAssistantTurn) {

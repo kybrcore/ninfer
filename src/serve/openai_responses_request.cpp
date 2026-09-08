@@ -1004,14 +1004,16 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
     }
     if (chat_style == ninfer::ChatStyle::FroggericV225) {
         const FroggericV225TemplateOptions v225 = parse_froggeric_v225_template_options(kwargs);
-        out.generation.preserve_reasoning = v225.preserve_reasoning;
-        out.generation.auto_disable_thinking_with_tools =
+        out.generation.froggeric_v225.preserve_reasoning = v225.preserve_reasoning;
+        out.generation.froggeric_v225.auto_disable_thinking_with_tools =
             v225.auto_disable_thinking_with_tools.value_or(false);
         if (v225.json_tool_format) {
-            out.generation.tool_call_format = ninfer::ToolCallFormat::Json;
+            out.generation.froggeric_v225.tool_call_format = ninfer::ToolCallFormat::Json;
         }
-        out.generation.max_tool_arg_chars      = v225.max_tool_arg_chars.value_or(0);
-        out.generation.max_tool_response_chars = v225.max_tool_response_chars.value_or(0);
+        out.generation.froggeric_v225.max_tool_arg_chars =
+            v225.max_tool_arg_chars.value_or(0);
+        out.generation.froggeric_v225.max_tool_response_chars =
+            v225.max_tool_response_chars.value_or(0);
     }
     if (kwargs.contains("preserve_thinking") && !kwargs.at("preserve_thinking").is_null()) {
         if (!kwargs.at("preserve_thinking").is_boolean()) {
@@ -1027,7 +1029,7 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
     }
     // The renderer prefers preserve_reasoning, so a conflicting pair must be rejected here
     // regardless of whether the caller supplied the alias at top level or in the kwargs.
-    reject_conflicting_preserve_options(out.generation.preserve_reasoning,
+    reject_conflicting_preserve_options(out.generation.froggeric_v225.preserve_reasoning,
                                         out.generation.preserve_thinking);
 }
 

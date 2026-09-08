@@ -1012,11 +1012,13 @@ int test_froggeric_v225_options() {
                                         {"max_tool_arg_chars", 12},
                                         {"max_tool_response_chars", 34}};
     const GenerationRequest mapped = parse_v225(body).prompt.generation;
-    failures += check(mapped.preserve_reasoning == true &&
-                          mapped.auto_disable_thinking_with_tools &&
-                          mapped.tool_call_format == ninfer::ToolCallFormat::Json &&
-                          mapped.max_tool_arg_chars == 12 && mapped.max_tool_response_chars == 34,
-                      "Responses v22.5 kwargs map onto the generation request");
+    const bool mapped_ok =
+        mapped.froggeric_v225.preserve_reasoning == true &&
+        mapped.froggeric_v225.auto_disable_thinking_with_tools &&
+        mapped.froggeric_v225.tool_call_format == ninfer::ToolCallFormat::Json &&
+        mapped.froggeric_v225.max_tool_arg_chars == 12 &&
+        mapped.froggeric_v225.max_tool_response_chars == 34;
+    failures += check(mapped_ok, "Responses v22.5 kwargs map onto the generation request");
 
     body["chat_template_kwargs"] = Json{{"preserve_reasoning", "yes"}};
     const ApiError type_error     = api_error([&] { (void)parse_v225(body); });
@@ -1032,7 +1034,7 @@ int test_froggeric_v225_options() {
                           "conflicting_template_option",
                       "Responses rejects a top-level/kwargs preserve conflict");
     body["chat_template_kwargs"] = Json{{"preserve_reasoning", false}};
-    failures += check(parse_v225(body).prompt.generation.preserve_reasoning == false,
+    failures += check(parse_v225(body).prompt.generation.froggeric_v225.preserve_reasoning == false,
                       "Responses accepts matching preserve aliases");
     return failures;
 }
