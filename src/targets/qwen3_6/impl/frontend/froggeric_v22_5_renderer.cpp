@@ -68,9 +68,9 @@ std::uint32_t utf8_next(std::string_view text, std::size_t& index) {
 // Python str.isspace() (Unicode White_Space; U+FEFF is not whitespace in Python).
 bool py_isspace(std::uint32_t cp) noexcept {
     return cp == 0x09U || cp == 0x0AU || cp == 0x0BU || cp == 0x0CU || cp == 0x0DU ||
-           (cp >= 0x1CU && cp <= 0x1FU) || cp == 0x85U || cp == 0xA0U || cp == 0x1680U ||
-           (cp >= 0x2000U && cp <= 0x200AU) || cp == 0x2028U || cp == 0x2029U || cp == 0x202FU ||
-           cp == 0x205FU || cp == 0x3000U;
+           (cp >= 0x1CU && cp <= 0x1FU) || cp == 0x20U || cp == 0x85U || cp == 0xA0U ||
+           cp == 0x1680U || (cp >= 0x2000U && cp <= 0x200AU) || cp == 0x2028U || cp == 0x2029U ||
+           cp == 0x202FU || cp == 0x205FU || cp == 0x3000U;
 }
 
 std::size_t py_strip_begin(std::string_view text) {
