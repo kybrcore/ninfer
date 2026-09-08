@@ -1,0 +1,12 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "video"
+    }
+   ]
+  }
+ ]
+}

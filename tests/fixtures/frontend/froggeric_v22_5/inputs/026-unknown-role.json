@@ -1,0 +1,16 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "u"
+  },
+  {
+   "role": "critic",
+   "content": "x"
+  }
+ ],
+ "kwargs": {
+  "add_generation_prompt": false
+ },
+ "oracle_only": true
+}

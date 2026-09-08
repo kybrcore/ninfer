@@ -1,0 +1,25 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q1"
+  },
+  {
+   "role": "assistant",
+   "content": "b1",
+   "reasoning_content": "r1"
+  },
+  {
+   "role": "user",
+   "content": "q2"
+  },
+  {
+   "role": "assistant",
+   "content": "b2",
+   "reasoning_content": "r2"
+  }
+ ],
+ "kwargs": {
+  "preserve_thinking": true
+ }
+}

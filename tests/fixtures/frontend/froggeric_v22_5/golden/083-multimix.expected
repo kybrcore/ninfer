@@ -1,0 +1,4 @@
+<|im_start|>user
+a<|vision_start|><|image_pad|><|vision_end|>b<|vision_start|><|video_pad|><|vision_end|>c<|im_end|>
+<|im_start|>assistant
+<think>

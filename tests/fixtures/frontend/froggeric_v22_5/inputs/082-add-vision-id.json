@@ -1,0 +1,21 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "image"
+    },
+    {
+     "type": "video"
+    },
+    {
+     "type": "image"
+    }
+   ]
+  }
+ ],
+ "kwargs": {
+  "add_vision_id": true
+ }
+}

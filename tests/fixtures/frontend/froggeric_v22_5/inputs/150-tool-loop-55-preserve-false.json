@@ -1,0 +1,556 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r0",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 0
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 0"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r1",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 1"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r2",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 2
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 2"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r3",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 3
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 3"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r4",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 4
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 4"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r5",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 5
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 5"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r6",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 6
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 6"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r7",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 7
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 7"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r8",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 8
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 8"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r9",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 9
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 9"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r10",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 10
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 10"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r11",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 11
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 11"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r12",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 12
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 12"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r13",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 13
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 13"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r14",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 14
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 14"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r15",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 15
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 15"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r16",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 16
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 16"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r17",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 17
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 17"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r18",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 18
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 18"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r19",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 19
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 19"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r20",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 20
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 20"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r21",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 21
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 21"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r22",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 22
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 22"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r23",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 23
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 23"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r24",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 24
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 24"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r25",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 25
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 25"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r26",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "i": 26
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok 26"
+  },
+  {
+   "role": "assistant",
+   "content": "done",
+   "reasoning_content": "final"
+  }
+ ],
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "get_weather",
+    "description": "Get weather for a city",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      },
+      "units": {
+       "type": "string",
+       "enum": [
+        "c",
+        "f"
+       ]
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  }
+ ],
+ "kwargs": {
+  "preserve_thinking": false
+ }
+}

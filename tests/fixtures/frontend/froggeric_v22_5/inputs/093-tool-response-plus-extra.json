@@ -1,0 +1,33 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r0",
+   "tool_calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "A"
+     }
+    }
+   ]
+  },
+  {
+   "role": "user",
+   "content": "<tool_response>ok</tool_response> and also this"
+  },
+  {
+   "role": "assistant",
+   "content": "b",
+   "reasoning_content": "r1"
+  }
+ ],
+ "kwargs": {
+  "preserve_thinking": false
+ }
+}
