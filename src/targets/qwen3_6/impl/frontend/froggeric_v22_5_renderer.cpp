@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -127,9 +128,18 @@ std::string py_lower(std::string_view text) {
     return out;
 }
 
+std::string truncation_notice(std::string_view text) {
+    return "\n[TRUNCATED - original length " + std::to_string(py_len(text)) + " chars]";
+}
+
+std::size_t py_prefix_bytes(std::string_view text, std::size_t max_chars) {
+    std::size_t index = 0, seen = 0;
+    while (seen < max_chars && index < text.size()) { utf8_next(text, index); ++seen; }
+    return index;
+}
+
 std::string truncate_python(std::string_view text, std::uint32_t max_chars) {
-    return py_slice(text, 0, max_chars) + "\n[TRUNCATED - original length " +
-           std::to_string(py_len(text)) + " chars]";
+    return py_slice(text, 0, max_chars) + truncation_notice(text);
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +169,8 @@ std::string py_escape_string(std::string_view text) {
         case '\r': out += "\\r"; ++index; continue;
         default: break;
         }
-        if (c < 0x20U) { out += "\\u00" + hex4(c).substr(2); ++index; continue; }
+        // Python json.dumps(ensure_ascii=True) escapes C0 controls and DEL (U+007F).
+        if (c < 0x20U || c == 0x7FU) { out += "\\u00" + hex4(c).substr(2); ++index; continue; }
         if (c < 0x80U) { out += static_cast<char>(c); ++index; continue; }
         std::size_t next = index;
         const std::uint32_t cp = utf8_next(text, next);
@@ -269,28 +280,85 @@ void apply_tag_state(const std::string& text, bool& thinking, ReasoningEffort& e
     }
 }
 
-// Main-loop stripping: for each of the ten tags, if present, erase all occurrences and
-// re-trim (jinja: content.split(tag) | join('') | trim).
-std::string strip_inline_tags(const std::string& rendered) {
-    std::string content = rendered;
-    const std::string_view tags[] = {kThinkOff,     kThinkOn,      kThinkXHigh,
-                                     kThinkHigh,    kThinkUltra,   kThinkExtreme,
-                                     kThinkMax,     kThinkLow,     kThinkMinimal,
-                                     kThinkMedium};
-    for (const std::string_view tag : tags) {
-        if (!contains(content, tag)) { continue; }
-        std::string stripped;
-        std::size_t index = 0;
-        while (true) {
-            const std::size_t found = content.find(tag, index);
-            if (found == std::string::npos) { stripped += content.substr(index); break; }
-            stripped += content.substr(index, found - index);
-            index = found + tag.size();
-        }
-        const auto [begin, end] = py_trim_bounds(stripped);
-        content.assign(stripped.substr(begin, end - begin));
+// Template order of the inline control tags (apply_tag_state above uses a separate
+// if/elif priority chain for the pre-scan, exactly like the jinja).
+constexpr std::string_view kInlineTags[] = {kThinkOff,  kThinkOn,     kThinkXHigh,
+                                            kThinkHigh, kThinkUltra,  kThinkExtreme,
+                                            kThinkMax,  kThinkMedium, kThinkLow,
+                                            kThinkMinimal};
+
+// jinja `content.split(tag) | join('') | trim` for every tag, in template order. The
+// origin map records each surviving byte's offset in the input, so literal spans, media
+// placeholders and part boundaries can be remapped after the removal. Built only when a
+// tag is actually present.
+class TagStripper {
+public:
+    explicit TagStripper(std::string text) : text_(std::move(text)) {
+        origin_.resize(text_.size());
+        for (std::size_t i = 0; i < origin_.size(); ++i) { origin_[i] = i; }
     }
-    return content;
+
+    void apply() {
+        for (const std::string_view tag : kInlineTags) {
+            if (!contains(text_, tag)) { continue; }
+            remove_all(tag);
+            trim();
+        }
+    }
+
+    [[nodiscard]] std::string take_text() && { return std::move(text_); }
+
+    [[nodiscard]] std::size_t map_position(std::size_t source) const {
+        return static_cast<std::size_t>(
+            std::lower_bound(origin_.begin(), origin_.end(), source) - origin_.begin());
+    }
+
+    [[nodiscard]] std::optional<ByteSpan> map_span(ByteSpan span) const {
+        const std::size_t begin = map_position(span.begin);
+        const std::size_t end   = map_position(span.end);
+        if (begin == end) { return std::nullopt; }
+        return ByteSpan{begin, end};
+    }
+
+private:
+    // One left-to-right pass, like str.split(tag) | join(''): a junction created by the
+    // removal is not rescanned for the same tag (a later tag may still match it).
+    void remove_all(std::string_view tag) {
+        std::string kept;
+        std::vector<std::size_t> kept_origin;
+        kept.reserve(text_.size());
+        kept_origin.reserve(origin_.size());
+        std::size_t index = 0;
+        while (index < text_.size()) {
+            if (std::string_view(text_).substr(index, tag.size()) == tag) {
+                index += tag.size();
+                continue;
+            }
+            kept.push_back(text_[index]);
+            kept_origin.push_back(origin_[index]);
+            ++index;
+        }
+        text_   = std::move(kept);
+        origin_ = std::move(kept_origin);
+    }
+
+    void trim() {
+        const auto [begin, end] = py_trim_bounds(text_);
+        text_.erase(end);
+        origin_.erase(origin_.begin() + static_cast<std::ptrdiff_t>(end), origin_.end());
+        text_.erase(0, begin);
+        origin_.erase(origin_.begin(), origin_.begin() + static_cast<std::ptrdiff_t>(begin));
+    }
+
+    std::string text_;
+    std::vector<std::size_t> origin_;
+};
+
+std::string strip_inline_tags(std::string rendered) {
+    if (!contains(rendered, "<|think_")) { return rendered; }
+    TagStripper stripper(std::move(rendered));
+    stripper.apply();
+    return std::move(stripper).take_text();
 }
 
 std::string_view reasoning_instructions_for(bool thinking, ReasoningEffort effort) noexcept {
@@ -309,6 +377,44 @@ std::string_view reasoning_instructions_for(bool thinking, ReasoningEffort effor
 // ---------------------------------------------------------------------------
 // Prompt assembly
 // ---------------------------------------------------------------------------
+
+// Rendered + trimmed message content with provenance.
+struct ContentBlock {
+    std::string text;                            // trimmed view
+    std::vector<ByteSpan> literals;              // trimmed view
+    std::vector<MediaPlaceholderByteSpec> media; // trimmed view
+    std::size_t trim_begin = 0, trim_end = 0;    // raw layout
+    std::vector<std::size_t> part_bounds_raw;    // raw layout
+};
+
+// Slice a rendered block, carrying literal spans and media placeholders with it. The
+// artifact renderer's slice_fragment uses the same contract: a slice may not cut a media
+// placeholder because the processor replaces exactly that byte range.
+ContentBlock slice_block(const ContentBlock& source, std::size_t begin, std::size_t end) {
+    if (begin > end || end > source.text.size()) {
+        throw std::logic_error("froggeric v22.5: content slice is out of range");
+    }
+    ContentBlock result;
+    if (begin == end) { return result; }
+    result.text = source.text.substr(begin, end - begin);
+    for (const ByteSpan span : source.literals) {
+        const std::size_t clipped_begin = std::max(span.begin, begin);
+        const std::size_t clipped_end   = std::min(span.end, end);
+        if (clipped_begin < clipped_end) {
+            append_span(result.literals, ByteSpan{clipped_begin - begin, clipped_end - begin});
+        }
+    }
+    for (MediaPlaceholderByteSpec placeholder : source.media) {
+        if (placeholder.bytes.end <= begin || placeholder.bytes.begin >= end) { continue; }
+        if (placeholder.bytes.begin < begin || placeholder.bytes.end > end) {
+            throw std::logic_error("froggeric v22.5: content slice intersects a media placeholder");
+        }
+        placeholder.bytes.begin -= begin;
+        placeholder.bytes.end -= begin;
+        result.media.push_back(std::move(placeholder));
+    }
+    return result;
+}
 
 struct PromptBuilder {
     std::string text;
@@ -340,6 +446,10 @@ struct PromptBuilder {
         }
     }
 
+    void append_content(const ContentBlock& block) {
+        append_content(block.text, block.literals, block.media);
+    }
+
     void mark_execution_boundary() {
         if (execution_boundaries.empty() || execution_boundaries.back() != text.size()) {
             execution_boundaries.push_back(text.size());
@@ -349,17 +459,8 @@ struct PromptBuilder {
     std::size_t size() const noexcept { return text.size(); }
 };
 
-// Rendered + trimmed message content with provenance.
-struct ContentBlock {
-    std::string text;                          // trimmed view
-    std::vector<ByteSpan> literals;            // trimmed view
-    std::vector<MediaPlaceholderByteSpec> media; // trimmed view
-    std::size_t trim_begin = 0, trim_end = 0;  // raw layout
-    std::vector<std::size_t> part_bounds_raw;  // raw layout
-};
-
 ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int* image_count,
-                            int* video_count, std::size_t* media_count) {
+                            int* video_count, std::size_t* media_count, bool strip_tags) {
     std::string raw;
     std::vector<ByteSpan> raw_literals;
     std::vector<MediaPlaceholderByteSpec> raw_media;
@@ -402,7 +503,38 @@ ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int*
         }
         part_bounds.push_back(raw.size());
     }
-    const auto [begin, end] = py_trim_bounds(raw);
+    // jinja trims the concatenated render, then strips inline tags on that view (system,
+    // developer and user messages only). The stripper carries a source-offset map so the
+    // rendered provenance stays exact even when a tag spans two text parts.
+    std::size_t begin = 0, end = raw.size();
+    if (strip_tags && contains(raw, "<|think_")) {
+        TagStripper stripper(std::move(raw));
+        stripper.apply();
+        std::vector<ByteSpan> mapped_literals;
+        for (const ByteSpan span : raw_literals) {
+            if (const std::optional<ByteSpan> mapped = stripper.map_span(span)) {
+                append_span(mapped_literals, *mapped);
+            }
+        }
+        std::vector<MediaPlaceholderByteSpec> mapped_media;
+        for (MediaPlaceholderByteSpec placeholder : raw_media) {
+            const std::optional<ByteSpan> mapped = stripper.map_span(placeholder.bytes);
+            if (!mapped || mapped->end - mapped->begin !=
+                               placeholder.bytes.end - placeholder.bytes.begin) {
+                throw std::logic_error("froggeric v22.5: inline tag removal crossed a media "
+                                       "placeholder");
+            }
+            placeholder.bytes = *mapped;
+            mapped_media.push_back(std::move(placeholder));
+        }
+        for (std::size_t& bound : part_bounds) { bound = stripper.map_position(bound); }
+        raw          = std::move(stripper).take_text();
+        raw_literals = std::move(mapped_literals);
+        raw_media    = std::move(mapped_media);
+        end          = raw.size();
+    } else {
+        std::tie(begin, end) = py_trim_bounds(raw);
+    }
     ContentBlock block;
     block.text            = raw.substr(begin, end - begin);
     block.trim_begin      = begin;
@@ -440,15 +572,18 @@ void validate_no_system_media(const ChatMessage& message) {
     }
 }
 
+// Assistant think-block extraction. The ranges are offsets into the trimmed rendered
+// content so the caller can slice the block and keep its literal/media provenance.
 struct ThinkExtraction {
-    std::string reasoning;
-    std::string body;
+    std::string explicit_reasoning; // trimmed message.reasoning_content, empty when derived
+    std::size_t reasoning_begin = 0;
+    std::size_t reasoning_end   = 0;
+    std::size_t body_begin      = 0;
 };
 
-// jinja split(marker)[0] / split(marker)[-1] use the FIRST occurrence.
-ThinkExtraction extract_think(const std::string& explicit_reasoning, std::string body) {
-    ThinkExtraction out{explicit_reasoning, body};
-    if (!out.reasoning.empty()) {
+ThinkExtraction extract_think(const std::string& explicit_reasoning, const std::string& body) {
+    ThinkExtraction out;
+    if (!explicit_reasoning.empty()) {
         std::string_view lead_end;
         if (body.rfind("<think>", 0) == 0 && body.find("</think>") != std::string::npos) {
             lead_end = "</think>";
@@ -461,12 +596,14 @@ ThinkExtraction extract_think(const std::string& explicit_reasoning, std::string
             lead_end = "</thinking>";
         }
         if (!lead_end.empty()) {
-            const std::size_t found = body.find(lead_end);
-            out.body = body.substr(found + lead_end.size());
-            while (!out.body.empty() && out.body.front() == '\n') { out.body.erase(out.body.begin()); }
+            // jinja: content.split(_lead_end)[-1].lstrip('\n')
+            out.body_begin = body.rfind(lead_end) + lead_end.size();
+            while (out.body_begin < body.size() && body[out.body_begin] == '\n') {
+                ++out.body_begin;
+            }
         }
-        const auto [r_begin, r_end] = py_trim_bounds(out.reasoning);
-        out.reasoning               = out.reasoning.substr(r_begin, r_end - r_begin);
+        const auto [r_begin, r_end] = py_trim_bounds(explicit_reasoning);
+        out.explicit_reasoning = explicit_reasoning.substr(r_begin, r_end - r_begin);
         return out;
     }
     std::string_view think_end;
@@ -490,20 +627,26 @@ ThinkExtraction extract_think(const std::string& explicit_reasoning, std::string
     if (!think_end.empty()) {
         const std::string think_start =
             think_end.find("thinking") != std::string_view::npos ? "<thinking>" : "<think>";
-        const std::size_t found = body.find(think_end);
-        std::string before = body.substr(0, found);
-        while (!before.empty() && before.back() == '\n') { before.pop_back(); }
-        if (before.find(think_start) != std::string::npos) {
-            const std::size_t start = before.rfind(think_start);
-            before = before.substr(start + think_start.size());
-            while (!before.empty() && before.front() == '\n') { before.erase(before.begin()); }
+        // jinja: reasoning = content.split(_think_end)[0].rstrip('\n') ...
+        std::size_t before_end = body.find(think_end);
+        while (before_end > 0 && body[before_end - 1] == '\n') { --before_end; }
+        std::size_t r_begin = 0;
+        const std::size_t open =
+            std::string_view(body).substr(0, before_end).rfind(think_start);
+        if (open != std::string_view::npos) {
+            r_begin = open + think_start.size();
+            while (r_begin < before_end && body[r_begin] == '\n') { ++r_begin; }
         }
-        out.reasoning = before;
-        out.body      = body.substr(found + think_end.size());
-        while (!out.body.empty() && out.body.front() == '\n') { out.body.erase(out.body.begin()); }
+        const auto [trim_begin, trim_end] =
+            py_trim_bounds(std::string_view(body).substr(r_begin, before_end - r_begin));
+        out.reasoning_begin = r_begin + trim_begin;
+        out.reasoning_end   = r_begin + trim_end;
+        // jinja: content = content.split(_think_end)[-1].lstrip('\n')
+        out.body_begin = body.rfind(think_end) + think_end.size();
+        while (out.body_begin < body.size() && body[out.body_begin] == '\n') {
+            ++out.body_begin;
+        }
     }
-    const auto [r_begin, r_end] = py_trim_bounds(out.reasoning);
-    out.reasoning               = out.reasoning.substr(r_begin, r_end - r_begin);
     return out;
 }
 
@@ -814,44 +957,9 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
         const bool is_instruction  = message.role == ChatRole::System ||
                                      message.role == ChatRole::Developer;
         if (is_instruction) { validate_no_system_media(message); }
-        // Inline tags are stripped per text part BEFORE rendering: the rendered provenance
-        // spans are rebuilt from the stripped text, so they always match the emitted bytes.
-        // (Template parity note: the jinja oracle strips the concatenated render, so a tag
-        // split across two adjacent text parts would not be stripped here; a single tag
-        // inside one text part - the only shape a client can meaningfully send - is.)
-        std::vector<ChatPart> stripped_parts;
-        const ChatMessage* render_message = &message;
-        ChatMessage stripped_message;
-        if (is_instruction || message.role == ChatRole::User) {
-            bool any_tag = false;
-            for (const ChatPart& part : message.parts) {
-                if (part.kind == ChatPartKind::Text && contains(part.text, "<|think_")) {
-                    any_tag = true;
-                    break;
-                }
-            }
-            if (any_tag) {
-                stripped_message.role    = message.role;
-                stripped_message.reasoning_content = message.reasoning_content;
-                stripped_message.tool_call_id      = message.tool_call_id;
-                stripped_message.tool_calls        = message.tool_calls;
-                for (const ChatPart& part : message.parts) {
-                    if (part.kind == ChatPartKind::Text) {
-                        stripped_message.parts.push_back(
-                            ChatPart::text_part(strip_inline_tags(part.text)));
-                    } else {
-                        stripped_message.parts.push_back(part);
-                    }
-                }
-                render_message = &stripped_message;
-            }
-        }
         ContentBlock content =
-            render_content(*render_message, options.add_vision_id, &image_count, &video_count,
-                           &media_count);
-        const auto emit = [&]() {
-            out.append_content(content.text, content.literals, content.media);
-        };
+            render_content(message, options.add_vision_id, &image_count, &video_count,
+                           &media_count, is_instruction || message.role == ChatRole::User);
         const auto resolve_part_boundaries = [&](std::size_t content_begin) {
             for (std::size_t marker_index = 0; marker_index < options.cache_markers.size();
                  ++marker_index) {
@@ -871,7 +979,7 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
         if (is_instruction) {
             out.append_template("<|im_start|>system\n");
             const std::size_t content_begin = out.size();
-            emit();
+            out.append_content(content);
             resolve_part_boundaries(content_begin);
             out.append_template("<|im_end|>\n");
             message_boundaries[i + 1U] = out.size();
@@ -882,7 +990,7 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
             consecutive_failures = 0;
             out.append_template("<|im_start|>user\n");
             const std::size_t content_begin = out.size();
-            emit();
+            out.append_content(content);
             resolve_part_boundaries(content_begin);
             out.append_template("<|im_end|>\n");
             message_boundaries[i + 1U] = out.size();
@@ -922,16 +1030,27 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
             }
 
             if (!prev_was_tool) { out.append_template("<|im_start|>user"); }
-            std::string tool_text = content.text;
             const bool is_json_payload =
-                options.tool_call_format == ToolCallFormat::Json && !tool_text.empty() &&
-                (tool_text.front() == '{' || tool_text.front() == '[');
-            if (!is_json_payload && options.max_tool_response_chars > 0 &&
-                py_len(tool_text) > options.max_tool_response_chars) {
-                tool_text = truncate_python(tool_text, options.max_tool_response_chars);
-            }
+                options.tool_call_format == ToolCallFormat::Json && !content.text.empty() &&
+                (content.text.front() == '{' || content.text.front() == '[');
+            const bool truncate =
+                !is_json_payload && options.max_tool_response_chars > 0 &&
+                py_len(content.text) > options.max_tool_response_chars;
             out.append_template("\n<tool_response>\n");
-            out.append_literal(tool_text);
+            if (truncate) {
+                const std::size_t keep =
+                    py_prefix_bytes(content.text, options.max_tool_response_chars);
+                for (const MediaPlaceholderByteSpec& placeholder : content.media) {
+                    if (placeholder.bytes.end > keep) {
+                        throw std::invalid_argument(
+                            "max_tool_response_chars truncates a media placeholder");
+                    }
+                }
+                out.append_content(slice_block(content, 0, keep));
+                out.append_template(truncation_notice(content.text));
+            } else {
+                out.append_content(content);
+            }
             if (consecutive_failures >= 2) {
                 out.append_template("\n\n⚠️ SYSTEM WARNING: ");
                 out.append_template(std::to_string(consecutive_failures));
@@ -962,12 +1081,12 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
                 .offset = static_cast<std::uint32_t>(out.size())};
             out.append_template("<|im_start|>assistant\n");
             out.mark_execution_boundary();
-            emit();
+            out.append_content(content);
             message_boundaries[i + 1U] = out.size();
             prev_was_tool = false;
             continue;
         }
-        const ThinkExtraction parts = extract_think(message.reasoning_content, content.text);
+        const ThinkExtraction think = extract_think(message.reasoning_content, content.text);
         const bool keep_thinking    = preserve_thinking || body_index > last_query_index;
         if (!preserve_thinking && !rewrite_checkpoint && body_index > last_query_index) {
             rewrite_checkpoint = RewriteCheckpointByteSpec{
@@ -979,17 +1098,21 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
         if (keep_thinking) {
             out.append_template("<think>\n");
             out.mark_execution_boundary();
-            out.append_literal(parts.reasoning);
+            if (!think.explicit_reasoning.empty()) {
+                out.append_literal(think.explicit_reasoning);
+            } else {
+                out.append_content(
+                    slice_block(content, think.reasoning_begin, think.reasoning_end));
+            }
             out.append_template("\n</think>\n\n");
             out.mark_execution_boundary();
         }
-        out.append_literal(parts.body);
-        const auto body_trimmed = [&] {
-            const auto [b, e] = py_trim_bounds(parts.body);
-            return e > b;
-        }();
+        const ContentBlock body = slice_block(content, think.body_begin, content.text.size());
+        out.append_content(body);
+        const auto [body_begin, body_end] = py_trim_bounds(body.text);
+        const bool body_has_text          = body_end > body_begin;
         for (std::size_t call_index = 0; call_index < message.tool_calls.size(); ++call_index) {
-            render_tool_call(message.tool_calls[call_index], call_index == 0, body_trimmed);
+            render_tool_call(message.tool_calls[call_index], call_index == 0, body_has_text);
         }
         out.append_template("<|im_end|>\n");
         message_boundaries[i + 1U] = out.size();

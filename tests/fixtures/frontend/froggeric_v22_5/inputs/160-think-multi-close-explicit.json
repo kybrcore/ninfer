@@ -1,0 +1,13 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "<think>x</think>mid</think>tail",
+   "reasoning_content": "r"
+  }
+ ]
+}

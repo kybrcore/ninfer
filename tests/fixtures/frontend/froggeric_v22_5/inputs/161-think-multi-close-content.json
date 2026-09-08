@@ -1,0 +1,12 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "a\n</think>b\n</think>c"
+  }
+ ]
+}
