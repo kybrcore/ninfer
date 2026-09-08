@@ -111,6 +111,8 @@ struct ProcessedInput {
     std::vector<std::uint32_t> rewrite_execution_frontiers;
     std::vector<std::optional<std::uint32_t>> message_boundaries;
     std::vector<std::optional<std::uint32_t>> cache_boundaries;
+    // Thinking state the rendered generation prompt leaves the model in (see RenderedChat).
+    bool generation_starts_in_thinking = true;
     PreprocessStats stats;
 
     [[nodiscard]] std::span<const std::int32_t> position_axis(int axis) const;
