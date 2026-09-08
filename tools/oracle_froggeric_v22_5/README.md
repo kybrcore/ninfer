@@ -24,7 +24,7 @@ python3 -m venv /tmp/ov
    expected raise.
 3. **Prompt-constant parity** — the tool instructions (XML/JSON × thinking on/off) and the low/xhigh
    reasoning instructions are re-rendered from the pinned template and compared byte-for-byte with
-   the constants in `src/targets/qwen3_6/impl/frontend/froggeric_v22_5_prompts.h`. This is why the
+   the constants in `src/targets/qwen3_6/impl/frontend/froggeric_v22_5/prompts.h`. This is why the
    renderer must never hand-copy instruction text.
 
 ```bash

@@ -1,4 +1,4 @@
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_tags.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/tags.h"
 
 #include <string>
 #include <utility>

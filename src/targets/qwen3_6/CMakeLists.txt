@@ -2,10 +2,6 @@ target_sources(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/chat_template.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/digest.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/frontend.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/froggeric_v22_5_python.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/froggeric_v22_5_renderer.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/froggeric_v22_5_tags.cpp
-  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/froggeric_v22_5_think.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/media_cache.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/processor.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/render_fragment.cpp
@@ -20,6 +16,8 @@ target_sources(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/runtime/visual_scatter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/vision/bindings.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/vision/control.cpp)
+
+add_subdirectory(impl/frontend/froggeric_v22_5)
 
 target_include_directories(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/export)
