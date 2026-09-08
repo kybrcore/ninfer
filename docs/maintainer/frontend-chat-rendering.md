@@ -87,6 +87,11 @@ Two rules keep this layer honest:
    unit test in `tests/targets/qwen3_6/test_froggeric_v22_5_helpers.cpp` before they are used by
    the renderer; the end-to-end fixtures alone are not enough to localize a helper regression.
 
+The shared `render_fragment.{h,cpp}` layer stays shared with the artifact renderer: upstream
+touched the builder/trim symbols it was extracted from once in the last 200 commits, so
+maintaining a second ~120-line copy to avoid an occasional delete/modify conflict is not worth
+it. When that conflict does occur, keep upstream's change and re-apply it to the shared helper.
+
 ## 4. Rendering invariants
 
 - **Preserve default.** `froggeric-v22.5` defaults `preserve_thinking` to true; an explicit
@@ -96,7 +101,9 @@ Two rules keep this layer honest:
   rendered result (request `enable_thinking`, `auto_disable_thinking_with_tools`, effort `none`,
   and inline control tags), and `PreparedPromptData::starts_in_reasoning` reads it. The output
   session must not start in reasoning-split mode when a tag or option closed thinking before the
-  generation suffix.
+  generation suffix. This is a core renderer contract, not a v22.5-only option: the artifact
+  renderer publishes the field too (`chat_template.cpp`), so the `ProcessedInput` /
+  `PreparedPromptData` plumbing stays in the shared frontend.
 - **Multi-step tool pre-scan.** The template's `multi_step_tool` rule renders user content without
   vision counting or `add_vision_id`; text parts do not append media placeholders. A user message
   whose literal text is exactly `<tool_response>...</tool_response>` counts as a tool query. When
