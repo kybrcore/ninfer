@@ -86,12 +86,16 @@ std::size_t py_strip_begin(std::string_view text) {
 std::size_t py_strip_end(std::string_view text) {
     std::size_t end = text.size();
     while (end > 0) {
-        std::size_t begin = end;
-        while (begin > 0 && (static_cast<std::uint8_t>(text[begin - 1]) & 0xC0U) == 0x80U) { --begin; }
-        std::size_t next = begin;
-        const std::uint32_t cp = utf8_next(text.substr(begin, end - begin), next);
+        const std::uint8_t last = static_cast<std::uint8_t>(text[end - 1]);
+        const int codepoint_bytes = last < 0x80U ? 1 : last < 0xE0U ? 2 : last < 0xF0U ? 3 : 4;
+        if (static_cast<std::size_t>(codepoint_bytes) > end) {
+            throw std::logic_error("froggeric v22.5: malformed UTF-8 in prompt text");
+        }
+        std::size_t next = 0;
+        const std::uint32_t cp = utf8_next(text.substr(end - static_cast<std::size_t>(codepoint_bytes)),
+                                           next);
         if (!py_isspace(cp)) { return end; }
-        end = begin;
+        end -= static_cast<std::size_t>(codepoint_bytes);
     }
     return end;
 }
