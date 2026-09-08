@@ -202,7 +202,9 @@ time; the ratios, not the absolute microseconds, are the portable signal.
   `finish_reason=stop`, and `request_done.result.tool_call_parse` records the fallback reason.
   The parser anchors on the left-most `<tool_call>` whose suffix parses (a marker quoted in prose no
   longer poisons the real call) and resolves `</parameter>` closes by region backtracking, so
-  literal `<parameter=...>` text inside an argument value survives. `tool_call_format: "json"`
+  literal `<parameter=...>` text inside an argument value survives. A ChatML control token leaked
+  into the function open tag (`<|im_start|>function=name>`) is rescued at block boundaries.
+  `tool_call_format: "json"`
   avoids the XML ambiguity entirely; the JSON parser also normalizes an OpenAI-style
   `{"function": {"name": ..., "arguments": ...}}` block to the native call shape and emits `{}`
   for missing or null arguments.

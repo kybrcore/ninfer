@@ -177,8 +177,9 @@ The endpoint supports:
 Tool-call parsing is terminal and all-or-nothing. When no anchor parses as a complete region, the
 complete region is returned as ordinary assistant content: no `tool_calls`, `finish_reason=stop`,
 and `request_done.result.tool_call_parse` records the fallback reason (see "Structured request
-log"). The parser tolerates a `<tool_call>` marker quoted in prose and literal `<parameter=...>`
-text inside an argument value; the `froggeric-v22.5` `tool_call_format: "json"` avoids the XML
+log"). The parser tolerates a `<tool_call>` marker quoted in prose, literal `<parameter=...>`
+text inside an argument value, and a ChatML control token leaked into the function open tag
+(`<|im_start|>function=name>`); the `froggeric-v22.5` `tool_call_format: "json"` avoids the XML
 ambiguity entirely.
 
 Options whose observable behavior the Engine cannot provide are rejected when they request that
