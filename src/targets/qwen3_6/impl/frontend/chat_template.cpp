@@ -717,7 +717,8 @@ RenderedChat CompiledChatTemplate::render(const std::vector<ChatMessage>& messag
                         .rewrite_checkpoint           = rewrite_checkpoint,
                         .rewrite_execution_boundaries = std::move(rewrite_execution_boundaries),
                         .message_boundaries           = std::move(message_boundaries),
-                        .cache_boundaries             = std::move(cache_boundaries)};
+                        .cache_boundaries             = std::move(cache_boundaries),
+                        .generation_starts_in_thinking = options.enable_thinking};
 }
 
 } // namespace ninfer::targets::qwen3_6::frontend_internal
