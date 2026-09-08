@@ -50,6 +50,9 @@ struct ToolCallOutputContract {
 
     std::vector<Tool> tools;
     bool enforce_declared_names = false;
+    // froggeric v22.5 JSON tool-call format: <tool_call> blocks carry a single JSON object
+    // {"name": ..., "arguments": ...} instead of the legacy XML parameter markup.
+    bool json_format = false;
 };
 
 struct ParsedToolCallOutput {
@@ -60,7 +63,8 @@ struct ParsedToolCallOutput {
 };
 
 [[nodiscard]] std::shared_ptr<const ToolCallOutputContract>
-build_tool_call_output_contract(std::span<const std::string> tool_jsons, bool enabled);
+build_tool_call_output_contract(std::span<const std::string> tool_jsons, bool enabled,
+                                bool json_format = false);
 
 [[nodiscard]] ParsedToolCallOutput
 parse_qwen_tool_call_output(const std::string& text, std::size_t max_tool_name_length,

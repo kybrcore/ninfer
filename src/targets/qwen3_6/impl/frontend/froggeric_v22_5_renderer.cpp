@@ -376,23 +376,29 @@ ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int*
             if (add_vision_id && image_count != nullptr) {
                 raw += "Picture " + std::to_string(*image_count) + ": ";
             }
+            raw += "<|vision_start|>";
+            // The placeholder span covers only the pad token: the processor replaces exactly
+            // that text with the expanded vision embeddings (artifact renderer convention).
             const std::size_t begin = raw.size();
-            raw += "<|vision_start|><|image_pad|><|vision_end|>";
+            raw += "<|image_pad|>";
             raw_media.push_back(MediaPlaceholderByteSpec{
                 .bytes      = ByteSpan{begin, raw.size()},
                 .modality   = Modality::Image,
                 .item_index = media_count != nullptr ? (*media_count)++ : 0});
+            raw += "<|vision_end|>";
         } else {
             if (video_count != nullptr) { ++*video_count; }
             if (add_vision_id && video_count != nullptr) {
                 raw += "Video " + std::to_string(*video_count) + ": ";
             }
+            raw += "<|vision_start|>";
             const std::size_t begin = raw.size();
-            raw += "<|vision_start|><|video_pad|><|vision_end|>";
+            raw += "<|video_pad|>";
             raw_media.push_back(MediaPlaceholderByteSpec{
                 .bytes      = ByteSpan{begin, raw.size()},
                 .modality   = Modality::Video,
                 .item_index = media_count != nullptr ? (*media_count)++ : 0});
+            raw += "<|vision_end|>";
         }
         part_bounds.push_back(raw.size());
     }
