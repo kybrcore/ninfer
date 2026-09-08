@@ -36,7 +36,7 @@ churn=200
 strict=0
 max_files=15
 max_lines=60
-owned='^(src/product/chat_style\.h|src/targets/qwen3_6/impl/frontend/froggeric_v22_5_|src/targets/qwen3_6/impl/frontend/render_fragment\.|src/targets/qwen3_6/impl/frontend/tool_call_json_parser\.)'
+owned='^(src/product/chat_style\.h|src/serve/froggeric_v225_request\.|src/targets/qwen3_6/impl/frontend/froggeric_v22_5/|src/targets/qwen3_6/impl/frontend/render_fragment\.|src/targets/qwen3_6/impl/frontend/tool_call_json_parser\.)'
 
 usage() { sed -n '2,27p' "$0"; }
 

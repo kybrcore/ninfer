@@ -2,10 +2,10 @@
 // tojson semantics, the inline-tag offset mapping, and think extraction independently of the
 // end-to-end oracle fixtures, so a helper regression fails with a precise assertion.
 
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_prompts.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_python.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_tags.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_think.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/prompts.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/python.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/tags.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/think.h"
 
 #include <iostream>
 #include <optional>

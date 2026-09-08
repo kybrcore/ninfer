@@ -5,18 +5,18 @@
 // (chat_template.jinja / chat_template_oneline.txt). See
 // tests/fixtures/frontend/froggeric_v22_5/PROVENANCE.md and tools/oracle_froggeric_v22_5/.
 //
-// This file is the orchestration only: Python string/tojson semantics live in
-// froggeric_v22_5_python.*, inline-tag handling in froggeric_v22_5_tags.*, think extraction
-// in froggeric_v22_5_think.*, and the pinned instruction texts in froggeric_v22_5_prompts.h.
+// This file is the orchestration only: Python string/tojson semantics live in python.*,
+// inline-tag handling in tags.*, think extraction in think.*, and the pinned instruction texts
+// in prompts.h.
 // The shared render-fragment contract (literal spans, media placeholders, slicing) is in
 // render_fragment.h and is also used by the artifact renderer.
 
 #include "targets/qwen3_6/impl/frontend/chat_template.h"
 
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_prompts.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_python.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_tags.h"
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_think.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/prompts.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/python.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/tags.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/think.h"
 #include "targets/qwen3_6/impl/frontend/render_fragment.h"
 
 #include <nlohmann/json.hpp>

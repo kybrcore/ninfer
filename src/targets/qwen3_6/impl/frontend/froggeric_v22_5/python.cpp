@@ -1,4 +1,4 @@
-#include "targets/qwen3_6/impl/frontend/froggeric_v22_5_python.h"
+#include "targets/qwen3_6/impl/frontend/froggeric_v22_5/python.h"
 
 #include <algorithm>
 #include <cctype>
