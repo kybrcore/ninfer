@@ -22,6 +22,8 @@ std::uint32_t utf8_next(std::string_view text, std::size_t& index);
 bool py_isspace(std::uint32_t codepoint) noexcept;
 std::size_t py_strip_begin(std::string_view text);
 std::size_t py_strip_end(std::string_view text);
+// Python str.strip() byte bounds: text.substr(begin, end - begin) is the stripped text. An
+// all-whitespace input reports the empty range {0, 0} so begin <= end always holds.
 std::pair<std::size_t, std::size_t> py_trim_bounds(std::string_view text);
 std::size_t py_len(std::string_view text);
 std::string py_slice(std::string_view text, std::size_t begin_cp, std::optional<std::size_t> end_cp);
