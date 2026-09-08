@@ -37,6 +37,14 @@ void apply_tag_state(const std::string& text, bool& thinking, ReasoningEffort& e
 // jinja `content.split(tag) | join('') | trim` for every tag, in template order. The
 // origin map records each surviving byte's offset in the input, so literal spans, media
 // placeholders and part boundaries can be remapped after the removal.
+//
+// Per-byte map cost (bench_froggeric_v22_5.cpp, 2026-09-08, clang -O2, Apple M-series): a tagged
+// 2 MiB input peaks at ~36 MiB (18x input) and renders in ~8.3 ms, versus ~8 MiB (4x) and
+// ~0.8 ms untagged. The 100 KiB production-sized case is ~0.4 ms / ~1.8 MiB (18x). The per-byte
+// origin vector (8 B/byte) plus remove_all's kept_origin copy dominates both. The measured bound
+// is recorded instead of a run-based map: the absolute cost is negligible at production sizes,
+// and a segmented rewrite would touch the provenance path that the property tests protect.
+// Revisit if multi-megabyte tagged prompts become a workload.
 class TagStripper {
 public:
     explicit TagStripper(std::string text) : text_(std::move(text)) {
