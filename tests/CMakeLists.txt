@@ -116,6 +116,13 @@ ninfer_add_test(ninfer_qwen3_6_frontend_test
 target_include_directories(ninfer_qwen3_6_frontend_test PRIVATE
   ${PROJECT_SOURCE_DIR}/src/targets/qwen3_6/export
   ${PROJECT_SOURCE_DIR}/src/targets/qwen3_6/impl)
+ninfer_add_test(ninfer_qwen3_6_froggeric_v22_5_test
+  SOURCES targets/qwen3_6/test_froggeric_v22_5.cpp
+  NEEDS_SOURCE_DIR
+  LIBRARIES ninfer_engine ninfer_core)
+target_include_directories(ninfer_qwen3_6_froggeric_v22_5_test PRIVATE
+  ${PROJECT_SOURCE_DIR}/src/targets/qwen3_6/export
+  ${PROJECT_SOURCE_DIR}/src/targets/qwen3_6/impl)
 ninfer_add_test(ninfer_qwen3_6_runtime_mechanisms_test
   SOURCES targets/qwen3_6/test_runtime_mechanisms.cpp
   LIBRARIES ninfer_engine ninfer_core)
