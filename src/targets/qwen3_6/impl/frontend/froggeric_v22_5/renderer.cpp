@@ -28,6 +28,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -50,10 +51,12 @@ ContentBlock slice_block(const ContentBlock& source, std::size_t begin, std::siz
     return out;
 }
 
-ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int* image_count,
-                            int* video_count, std::size_t* media_count, bool strip_tags) {
+// (a) Parts -> raw fragment plus one raw part boundary per part.
+RenderedFragment render_message_parts(const ChatMessage& message, bool add_vision_id,
+                                      int* image_count, int* video_count,
+                                      std::size_t* media_count,
+                                      std::vector<std::size_t>& part_bounds) {
     RenderBuilder raw;
-    std::vector<std::size_t> part_bounds;
     for (const ChatPart& part : message.parts) {
         if (part.kind == ChatPartKind::Text) {
             raw.append_literal(part.text);
@@ -78,48 +81,63 @@ ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int*
         }
         part_bounds.push_back(raw.size());
     }
-    RenderedFragment fragment = std::move(raw).release();
+    return std::move(raw).release();
+}
 
-    // jinja trims the concatenated render, then strips inline tags on that view (system,
-    // developer and user messages only). The stripper carries a source-offset map so the
-    // rendered provenance stays exact even when a tag spans two text parts.
-    std::size_t begin = 0, end = fragment.text.size();
-    if (strip_tags && contains(fragment.text, "<|think_")) {
-        TagStripper stripper(std::move(fragment.text));
-        stripper.apply();
-        std::vector<ByteSpan> mapped_literals;
-        for (const ByteSpan span : fragment.literal_spans) {
-            if (const std::optional<ByteSpan> mapped = stripper.map_span(span)) {
-                append_literal_span(mapped_literals, *mapped);
-            }
+// (b) jinja strips inline tags on the concatenated view (system, developer and user messages
+// only). The stripper carries a source-offset map so literal spans, media placeholders and part
+// boundaries stay exact even when a tag spans two text parts.
+void strip_inline_tags_in_place(RenderedFragment& fragment,
+                                std::vector<std::size_t>& part_bounds) {
+    TagStripper stripper(std::move(fragment.text));
+    stripper.apply();
+    std::vector<ByteSpan> mapped_literals;
+    for (const ByteSpan span : fragment.literal_spans) {
+        if (const std::optional<ByteSpan> mapped = stripper.map_span(span)) {
+            append_literal_span(mapped_literals, *mapped);
         }
-        std::vector<MediaPlaceholderByteSpec> mapped_media;
-        for (MediaPlaceholderByteSpec placeholder : fragment.media_placeholders) {
-            const std::optional<ByteSpan> mapped = stripper.map_span(placeholder.bytes);
-            if (!mapped || mapped->end - mapped->begin !=
-                               placeholder.bytes.end - placeholder.bytes.begin) {
-                throw std::logic_error("froggeric v22.5: inline tag removal crossed a media "
-                                       "placeholder");
-            }
-            placeholder.bytes = *mapped;
-            mapped_media.push_back(std::move(placeholder));
-        }
-        for (std::size_t& bound : part_bounds) { bound = stripper.map_position(bound); }
-        fragment.text               = std::move(stripper).take_text();
-        fragment.literal_spans      = std::move(mapped_literals);
-        fragment.media_placeholders = std::move(mapped_media);
-        end                         = fragment.text.size();
-    } else {
-        const auto [trim_begin, trim_end] = py_trim_bounds(fragment.text);
-        begin                              = trim_begin;
-        end                                = trim_end;
     }
+    std::vector<MediaPlaceholderByteSpec> mapped_media;
+    for (MediaPlaceholderByteSpec placeholder : fragment.media_placeholders) {
+        const std::optional<ByteSpan> mapped = stripper.map_span(placeholder.bytes);
+        if (!mapped || mapped->end - mapped->begin !=
+                           placeholder.bytes.end - placeholder.bytes.begin) {
+            throw std::logic_error("froggeric v22.5: inline tag removal crossed a media "
+                                   "placeholder");
+        }
+        placeholder.bytes = *mapped;
+        mapped_media.push_back(std::move(placeholder));
+    }
+    for (std::size_t& bound : part_bounds) { bound = stripper.map_position(bound); }
+    fragment.text               = std::move(stripper).take_text();
+    fragment.literal_spans      = std::move(mapped_literals);
+    fragment.media_placeholders = std::move(mapped_media);
+}
+
+// (c) Trim to [begin, end) and keep the raw layout the cache markers resolve against.
+ContentBlock make_content_block(RenderedFragment&& fragment, std::size_t begin, std::size_t end,
+                                std::vector<std::size_t>&& part_bounds) {
     ContentBlock block;
     block.fragment        = slice_fragment(fragment, begin, end);
     block.trim_begin      = begin;
     block.trim_end        = end;
     block.part_bounds_raw = std::move(part_bounds);
     return block;
+}
+
+ContentBlock render_content(const ChatMessage& message, bool add_vision_id, int* image_count,
+                            int* video_count, std::size_t* media_count, bool strip_tags) {
+    std::vector<std::size_t> part_bounds;
+    RenderedFragment fragment = render_message_parts(message, add_vision_id, image_count,
+                                                     video_count, media_count, part_bounds);
+    std::size_t begin = 0, end = fragment.text.size();
+    if (strip_tags && contains(fragment.text, "<|think_")) {
+        strip_inline_tags_in_place(fragment, part_bounds);
+        end = fragment.text.size();
+    } else {
+        std::tie(begin, end) = py_trim_bounds(fragment.text);
+    }
+    return make_content_block(std::move(fragment), begin, end, std::move(part_bounds));
 }
 
 void validate_no_system_media(const ChatMessage& message) {
