@@ -1998,6 +1998,53 @@ int test_disabled_vision() {
     return failures;
 }
 
+// The compiled froggeric v22.5 renderer must publish media placeholders for tool-result
+// images, which the OpenAI and Anthropic request routes accept. This exercises the full
+// renderer -> processor -> tokenizer path that the artifact style already supports.
+int test_froggeric_v225_tool_image_processing() {
+    const std::vector<std::uint8_t> bytes = gradient_ppm();
+    fi::ProcessorOptions options;
+    auto cache = std::make_shared<fi::MediaPreprocessCache>(ninfer::kDefaultMediaCacheBytes,
+                                                            ninfer::kDefaultMediaLiveBytes);
+    const fi::CompiledChatTemplate v225 = fi::CompiledChatTemplate::froggeric_v225();
+    fi::Processor processor(fixture_tokenizer(), v225, options, std::move(cache));
+
+    std::vector<fi::ChatMessage> messages;
+    fi::ChatMessage user;
+    user.role = ninfer::ChatRole::User;
+    user.parts.push_back(fi::ChatPart::text_part("capture"));
+    messages.push_back(std::move(user));
+
+    fi::ChatMessage assistant;
+    assistant.role = ninfer::ChatRole::Assistant;
+    assistant.tool_calls.push_back(fi::ToolCall{.name = "f", .arguments_json = "{}"});
+    messages.push_back(std::move(assistant));
+
+    fi::ChatMessage tool;
+    tool.role = ninfer::ChatRole::Tool;
+    tool.parts.push_back(fi::ChatPart::text_part("captured "));
+    tool.parts.push_back(fi::ChatPart::image(fi::MediaData{.bytes       = bytes,
+                                                           .media_type  = "image/x-portable-pixmap",
+                                                           .source_name = "tool-result.ppm"}));
+    messages.push_back(std::move(tool));
+
+    fi::ChatRenderOptions render;
+    render.tool_jsons.push_back(
+        R"({"type":"function","function":{"name":"f","parameters":{"type":"object"}}})");
+    fi::ProcessedInput processed;
+    bool prepared = false;
+    try {
+        processed = processor.process(std::move(messages), std::move(render));
+        prepared  = true;
+    } catch (const std::exception&) {
+        prepared = false;
+    }
+    int failures = check(prepared && processed.vision_items.size() == 1 &&
+                             processed.media_payloads.size() == 1 && !processed.input_ids.empty(),
+                         "froggeric v22.5 tool-result image reached the Processor");
+    return failures;
+}
+
 int test_invalid_media_classification() {
     const Frontend frontend = FrontendFactory::create_component(resources());
     auto invalid_image      = [] {
@@ -2246,5 +2293,6 @@ int main() {
     failures += test_media_preparation_cancellation();
     failures += test_invalid_media_classification();
     failures += test_disabled_vision();
+    failures += test_froggeric_v225_tool_image_processing();
     return failures == 0 ? 0 : 1;
 }
