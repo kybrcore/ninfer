@@ -20,6 +20,22 @@ for the selected tool.
 | Exercise a resident HTTP server | [`smoke/serve_contract.py`](smoke/serve_contract.py) |
 | Exercise thinking preservation through a managed server | [`smoke/serve_thinking_preservation.py`](smoke/serve_thinking_preservation.py) |
 | Verify the compiled froggeric v22.5 prompt oracle | [`oracle_froggeric_v22_5/`](oracle_froggeric_v22_5/README.md) |
+| Measure the upstream merge surface of a customization branch | [`maintainer/upstream_surface.sh`](maintainer/upstream_surface.sh) |
+
+## Upstream merge surface
+
+Before syncing an upstream branch into a customization line, measure how much of the branch's own
+diff lands in files upstream also edits, and rehearse the merge without touching the work tree:
+
+```bash
+tools/maintainer/upstream_surface.sh --line experiment/froggeric-v225-yarn
+tools/maintainer/upstream_surface.sh --strict   # exit 1 when the seam budget is exceeded
+```
+
+`--parent` selects the long-lived line the branch forks from (default `mobile-quasar-yarn`); the
+seam total counts only modified files under `src/`, `apps/` and `include/`. The rehearsal uses
+`git merge-tree` and needs git >= 2.38. This is a bash-only tool; it does not need the Python
+environment the other tools use.
 
 ## Artifact workflow
 
