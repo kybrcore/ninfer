@@ -27,6 +27,9 @@ constexpr std::string_view kParamClose    = "</parameter>";
 // A model may quote "<tool_call>" in prose before the real call. Every occurrence is a candidate
 // region anchor, bounded to keep pathological payloads cheap.
 constexpr std::size_t kMaxAnchorCandidates = 64;
+// Bound for the parameter-close backtracking search (see QwenToolRegionParser). The budget keeps
+// pathological payloads terminating; exhausting it degrades to the historical fallback.
+constexpr std::size_t kBacktrackingStepBudget = 200'000;
 
 struct RawParameter {
     std::string_view name;
@@ -415,9 +418,39 @@ class QwenToolRegionParser {
 public:
     QwenToolRegionParser(std::string_view text, std::size_t max_name_length,
                          const Contract& contract)
-        : text_(text), max_name_length_(max_name_length), contract_(contract) {}
+        : text_(text), max_name_length_(max_name_length), contract_(contract) {
+        for (std::size_t pos = text_.find(kParamClose); pos != std::string_view::npos;
+             pos             = text_.find(kParamClose, pos + kParamClose.size())) {
+            parameter_closes_.push_back(pos);
+        }
+    }
 
+    // The nesting-aware greedy parse runs first: it keeps the historical interpretation for
+    // balanced embedded markup and still reports DuplicateParameter and friends. Only a
+    // MalformedStructure failure retries with a bounded backtracking search that disambiguates
+    // parameter closes by scoring complete region parses. Every previously accepted payload stays
+    // byte-identical; payloads whose values embed unbalanced parameter markup are rescued instead
+    // of falling back to plain text.
     FallbackReason parse(std::vector<RawToolCall>& calls) const {
+        std::vector<RawToolCall> greedy_calls;
+        const FallbackReason greedy = parse_greedy(greedy_calls);
+        if (greedy != FallbackReason::MalformedStructure) {
+            calls = std::move(greedy_calls);
+            return greedy;
+        }
+
+        SearchState state;
+        std::vector<RawToolCall> backtracked;
+        backtrack_region(0, backtracked, state);
+        if (state.has_best) {
+            calls = std::move(state.best);
+            return FallbackReason::None;
+        }
+        return FallbackReason::MalformedStructure;
+    }
+
+private:
+    FallbackReason parse_greedy(std::vector<RawToolCall>& calls) const {
         std::size_t pos = 0;
         for (;;) {
             skip_format_whitespace(text_, pos);
@@ -436,7 +469,151 @@ public:
         }
     }
 
-private:
+    struct SolutionScore {
+        std::size_t declared_hits = 0;
+        std::size_t undeclared    = 0;
+        std::size_t parameters    = 0;
+        std::size_t value_bytes   = 0;
+    };
+
+    struct SearchState {
+        std::vector<RawToolCall> best;
+        SolutionScore best_score;
+        std::size_t steps = kBacktrackingStepBudget;
+        bool has_best     = false;
+
+        bool spend() {
+            if (steps == 0) { return false; }
+            --steps;
+            return true;
+        }
+
+        bool exhausted() const { return steps == 0; }
+    };
+
+    // Order solutions by contract fit: declared parameter names first, then fewer undeclared names,
+    // then more parameters, then the longest retained values. The last tie-break keeps payload
+    // bytes (a rightward close) instead of silently truncating a value.
+    static bool score_precedes(const SolutionScore& lhs, const SolutionScore& rhs) {
+        if (lhs.declared_hits != rhs.declared_hits) {
+            return lhs.declared_hits > rhs.declared_hits;
+        }
+        if (lhs.undeclared != rhs.undeclared) { return lhs.undeclared < rhs.undeclared; }
+        if (lhs.parameters != rhs.parameters) { return lhs.parameters > rhs.parameters; }
+        return lhs.value_bytes > rhs.value_bytes;
+    }
+
+    SolutionScore score_calls(const std::vector<RawToolCall>& calls) const {
+        SolutionScore score;
+        for (const RawToolCall& call : calls) {
+            const Contract::Tool* tool = find_tool_contract(contract_, call.name);
+            if (tool != nullptr && !tool->unambiguous) { tool = nullptr; }
+            for (const RawParameter& parameter : call.parameters) {
+                ++score.parameters;
+                score.value_bytes += parameter.value.size();
+                if (tool == nullptr) { continue; }
+                if (find_parameter_contract(*tool, parameter.name) != nullptr) {
+                    ++score.declared_hits;
+                } else {
+                    ++score.undeclared;
+                }
+            }
+        }
+        return score;
+    }
+
+    void record_solution(const std::vector<RawToolCall>& calls, SearchState& state) const {
+        if (calls.empty()) { return; }
+        const SolutionScore score = score_calls(calls);
+        if (state.has_best && !score_precedes(score, state.best_score)) { return; }
+        state.best       = calls;
+        state.best_score = score;
+        state.has_best   = true;
+    }
+
+    void backtrack_region(std::size_t pos, std::vector<RawToolCall>& calls,
+                          SearchState& state) const {
+        if (state.exhausted()) { return; }
+        skip_format_whitespace(text_, pos);
+        if (pos == text_.size()) {
+            record_solution(calls, state);
+            return;
+        }
+        if (!starts_with_at(text_, pos, kToolOpen)) { return; }
+        backtrack_tool_call(pos, calls, state);
+    }
+
+    void backtrack_tool_call(std::size_t pos, std::vector<RawToolCall>& calls,
+                             SearchState& state) const {
+        if (!consume(pos, kToolOpen)) { return; }
+        skip_format_whitespace(text_, pos);
+        RawToolCall call;
+        backtrack_function(pos, call, calls, state);
+    }
+
+    void backtrack_function(std::size_t pos, RawToolCall& call, std::vector<RawToolCall>& calls,
+                            SearchState& state) const {
+        if (!consume(pos, kFunctionOpen)) { return; }
+        const std::size_t name_begin = pos;
+        const std::size_t name_end   = text_.find('>', name_begin);
+        if (name_end == std::string_view::npos || name_end == name_begin) { return; }
+        call.name = text_.substr(name_begin, name_end - name_begin);
+        if (!valid_function_name(call.name, max_name_length_)) { return; }
+        if (contract_.enforce_declared_names &&
+            find_tool_contract(contract_, call.name) == nullptr) {
+            return;
+        }
+        pos = name_end + 1;
+        backtrack_parameter_list(pos, call, calls, state);
+    }
+
+    void backtrack_parameter_list(std::size_t pos, RawToolCall& call,
+                                  std::vector<RawToolCall>& calls, SearchState& state) const {
+        if (state.exhausted()) { return; }
+        skip_format_whitespace(text_, pos);
+        if (consume(pos, kFunctionClose)) {
+            skip_format_whitespace(text_, pos);
+            if (!consume(pos, kToolClose)) { return; }
+            calls.push_back(call);
+            backtrack_region(pos, calls, state);
+            calls.pop_back();
+            return;
+        }
+        backtrack_parameter(pos, call, calls, state);
+    }
+
+    void backtrack_parameter(std::size_t pos, RawToolCall& call, std::vector<RawToolCall>& calls,
+                             SearchState& state) const {
+        if (!consume(pos, kParamOpen)) { return; }
+        const std::size_t name_begin = pos;
+        const std::size_t name_end   = text_.find('>', name_begin);
+        if (name_end == std::string_view::npos || name_end == name_begin) { return; }
+        const std::string_view name = text_.substr(name_begin, name_end - name_begin);
+        if (std::any_of(call.parameters.begin(), call.parameters.end(),
+                        [&](const RawParameter& existing) { return existing.name == name; })) {
+            return;
+        }
+
+        const std::size_t value_begin = name_end + 1;
+        const std::size_t saved       = call.parameters.size();
+        // Try candidate closes right to left. Positions are precomputed so the search stays
+        // linear in the region instead of rescanning for each candidate.
+        const auto first_candidate =
+            std::lower_bound(parameter_closes_.begin(), parameter_closes_.end(), value_begin);
+        for (auto candidate = parameter_closes_.end(); candidate != first_candidate;) {
+            --candidate;
+            if (!state.spend()) { return; }
+            const std::size_t after = *candidate + kParamClose.size();
+            call.parameters.insert(
+                call.parameters.begin() + static_cast<std::ptrdiff_t>(saved),
+                RawParameter{.name  = name,
+                             .value = text_.substr(value_begin, *candidate - value_begin)});
+            backtrack_parameter_list(after, call, calls, state);
+            call.parameters.erase(call.parameters.begin() + static_cast<std::ptrdiff_t>(saved));
+            if (state.exhausted()) { return; }
+        }
+    }
+
     bool consume(std::size_t& pos, std::string_view token) const {
         if (!starts_with_at(text_, pos, token)) { return false; }
         pos += token.size();
@@ -542,6 +719,7 @@ private:
     std::string_view text_;
     std::size_t max_name_length_;
     const Contract& contract_;
+    std::vector<std::size_t> parameter_closes_;
 };
 
 GeneratedToolCall normalize_raw_tool_call(const RawToolCall& raw, const Contract& contract,

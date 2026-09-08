@@ -2,6 +2,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include <chrono>
+#include <cstddef>
 #include <initializer_list>
 #include <iostream>
 #include <memory>
@@ -214,22 +216,6 @@ int test_string_values_preserve_embedded_tool_markup() {
     return failures;
 }
 
-int test_unrepresentable_parameter_delimiters_fall_back() {
-    const auto contract = contract_for("bash", Json{{"command", Json{{"type", "string"}}}});
-    const std::string unmatched_open =
-        tool_call("bash", {{"command", "echo '<parameter=unterminated>'"}});
-    const std::string standalone_close = tool_call("bash", {{"command", "echo '</parameter>'"}});
-
-    int failures = 0;
-    failures += check_rejected(unmatched_open, contract,
-                               ninfer::ToolCallParseFallbackReason::MalformedStructure,
-                               "unbalanced nested parameter open was silently repaired");
-    failures += check_rejected(standalone_close, contract,
-                               ninfer::ToolCallParseFallbackReason::MalformedStructure,
-                               "standalone parameter close was guessed to be string content");
-    return failures;
-}
-
 int check_decoder_chunk_independent(const fi::ToolCallOutputContract& contract,
                                     const std::string& text, std::string_view message) {
     auto shared = std::make_shared<fi::ToolCallOutputContract>(contract);
@@ -252,6 +238,43 @@ int check_decoder_chunk_independent(const fi::ToolCallOutputContract& contract,
         }
     }
     return check(stable, std::string(message));
+}
+
+int test_embedded_parameter_delimiters_are_preserved() {
+    const auto contract = contract_for("bash", Json{{"command", Json{{"type", "string"}}}});
+    const std::string unmatched_open =
+        tool_call("bash", {{"command", "echo '<parameter=unterminated>'"}});
+    const std::string standalone_close = tool_call("bash", {{"command", "echo '</parameter>'"}});
+
+    int failures      = 0;
+    const auto opened = fi::parse_qwen_tool_call_output(unmatched_open, 64, contract);
+    failures += check(opened.is_tool_call_response && opened.tool_calls.size() == 1,
+                      "unbalanced nested parameter open was not rescued");
+    if (opened.tool_calls.size() == 1) {
+        failures += check(Json::parse(opened.tool_calls.front().arguments_json).at("command") ==
+                              "echo '<parameter=unterminated>'",
+                          "unbalanced nested parameter open value changed");
+    }
+    const auto closed = fi::parse_qwen_tool_call_output(standalone_close, 64, contract);
+    failures += check(closed.is_tool_call_response && closed.tool_calls.size() == 1,
+                      "standalone parameter close was not rescued");
+    if (closed.tool_calls.size() == 1) {
+        failures += check(Json::parse(closed.tool_calls.front().arguments_json).at("command") ==
+                              "echo '</parameter>'",
+                          "standalone parameter close value changed");
+    }
+
+    // Truncated output must stay a fallback: no close can complete the region.
+    const std::string truncated = "<tool_call>\n<function=bash>\n<parameter=command>\nls -la";
+    failures +=
+        check_rejected(truncated, contract, ninfer::ToolCallParseFallbackReason::MalformedStructure,
+                       "truncated parameter was silently repaired");
+    const std::string unterminated_function =
+        "<tool_call>\n<function=bash>\n<parameter=command>\nls -la\n</parameter>";
+    failures += check_rejected(unterminated_function, contract,
+                               ninfer::ToolCallParseFallbackReason::MalformedStructure,
+                               "missing function close was silently repaired");
+    return failures;
 }
 
 int test_xml_candidate_anchor() {
@@ -291,6 +314,130 @@ int test_xml_candidate_anchor() {
                   Json::parse(separated_parsed.tool_calls.front().arguments_json).at("command") ==
                       "second",
               "prose between two calls did not select the trailing call");
+    return failures;
+}
+
+int test_xml_parameter_close_disambiguation() {
+    const auto bash  = contract_for("bash", Json{{"command", Json{{"type", "string"}}}});
+    const auto write = contract_for(
+        "write", Json{{"content", Json{{"type", "string"}}}, {"path", Json{{"type", "string"}}}});
+    int failures = 0;
+
+    // pi session row 380/382: an unmatched nested open inside the value.
+    const std::string grep = "<tool_call>\n"
+                             "<function=bash>\n"
+                             "<parameter=command>\n"
+                             "grep -o '<parameter=msg>[^<]*' file.txt\n"
+                             "</parameter>\n"
+                             "</function>\n"
+                             "</tool_call>";
+    const auto grep_parsed = fi::parse_qwen_tool_call_output(grep, 64, bash);
+    failures += check(grep_parsed.is_tool_call_response && grep_parsed.tool_calls.size() == 1,
+                      "unmatched parameter open in a value broke the call");
+    if (grep_parsed.tool_calls.size() == 1) {
+        failures +=
+            check(Json::parse(grep_parsed.tool_calls.front().arguments_json).at("command") ==
+                      "grep -o '<parameter=msg>[^<]*' file.txt",
+                  "grep command bytes changed");
+    }
+    failures += check_decoder_chunk_independent(bash, grep, "grep decoding depends on chunking");
+
+    // A literal close at the end of the value.
+    const std::string literal_close = tool_call("bash", {{"command", "printf '</parameter>'"}});
+    const auto close_parsed         = fi::parse_qwen_tool_call_output(literal_close, 64, bash);
+    failures +=
+        check(close_parsed.is_tool_call_response && close_parsed.tool_calls.size() == 1 &&
+                  Json::parse(close_parsed.tool_calls.front().arguments_json).at("command") ==
+                      "printf '</parameter>'",
+              "literal close inside a value was not preserved");
+
+    // Write-file shape: the value embeds a complete parameter block; the sibling must survive.
+    const std::string write_text = "<tool_call>\n"
+                                   "<function=write>\n"
+                                   "<parameter=content>\n"
+                                   "before <parameter=path>example</parameter> after\n"
+                                   "</parameter>\n"
+                                   "<parameter=path>\n"
+                                   "/tmp/example.txt\n"
+                                   "</parameter>\n"
+                                   "</function>\n"
+                                   "</tool_call>";
+    const auto write_parsed      = fi::parse_qwen_tool_call_output(write_text, 64, write);
+    failures += check(write_parsed.is_tool_call_response && write_parsed.tool_calls.size() == 1,
+                      "write-file shape with embedded parameter markup broke");
+    if (write_parsed.tool_calls.size() == 1) {
+        const Json args = Json::parse(write_parsed.tool_calls.front().arguments_json);
+        failures +=
+            check(args.size() == 2 &&
+                      args.at("content") == "before <parameter=path>example</parameter> after" &&
+                      args.at("path") == "/tmp/example.txt",
+                  "embedded parameter block swallowed the sibling parameter");
+    }
+    failures += check_decoder_chunk_independent(write, write_text,
+                                                "write-file decoding depends on chunking");
+
+    // Unmatched open in the value plus a real sibling: the sibling must not be swallowed.
+    const std::string mixed = "<tool_call>\n"
+                              "<function=write>\n"
+                              "<parameter=content>\n"
+                              "grep -o '<parameter=msg>[^<]*' file.txt\n"
+                              "</parameter>\n"
+                              "<parameter=path>\n"
+                              "/tmp/mixed.txt\n"
+                              "</parameter>\n"
+                              "</function>\n"
+                              "</tool_call>";
+    const auto mixed_parsed = fi::parse_qwen_tool_call_output(mixed, 64, write);
+    failures += check(mixed_parsed.is_tool_call_response && mixed_parsed.tool_calls.size() == 1,
+                      "unmatched open with a sibling parameter broke the call");
+    if (mixed_parsed.tool_calls.size() == 1) {
+        const Json args = Json::parse(mixed_parsed.tool_calls.front().arguments_json);
+        failures += check(args.size() == 2 &&
+                              args.at("content") == "grep -o '<parameter=msg>[^<]*' file.txt" &&
+                              args.at("path") == "/tmp/mixed.txt",
+                          "unmatched open value swallowed or truncated the sibling parameter");
+    }
+
+    // Parameter order is preserved exactly.
+    const auto ordered = contract_for("configure", Json{{"alpha", Json{{"type", "string"}}},
+                                                        {"beta", Json{{"type", "string"}}},
+                                                        {"gamma", Json{{"type", "string"}}}});
+    const auto ordered_parsed = fi::parse_qwen_tool_call_output(
+        tool_call("configure", {{"alpha", "1"}, {"beta", "2"}, {"gamma", "3"}}), 64, ordered);
+    failures +=
+        check(ordered_parsed.is_tool_call_response && ordered_parsed.tool_calls.size() == 1 &&
+                  ordered_parsed.tool_calls.front().arguments_json ==
+                      "{\"alpha\":\"1\",\"beta\":\"2\",\"gamma\":\"3\"}",
+              "parameter document order changed");
+    return failures;
+}
+
+int test_xml_parameter_close_budget() {
+    const auto write = contract_for(
+        "write", Json{{"content", Json{{"type", "string"}}}, {"path", Json{{"type", "string"}}}});
+    std::string payload     = "head <parameter=msg>\n";
+    const std::string chunk = std::string(80, 'x') + " </parameter>\n";
+    for (int index = 0; index < 1000; ++index) { payload += chunk; }
+    payload += "tail";
+    const std::string text = tool_call("write", {{"content", payload}, {"path", "/tmp/x"}});
+
+    const auto started = std::chrono::steady_clock::now();
+    const auto parsed  = fi::parse_qwen_tool_call_output(text, 64, write);
+    const auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::steady_clock::now() - started)
+                             .count();
+
+    int failures = 0;
+    failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1,
+                      "pathological payload was not parsed");
+    if (parsed.tool_calls.size() == 1) {
+        const Json args = Json::parse(parsed.tool_calls.front().arguments_json);
+        failures +=
+            check(args.size() == 2 && args.at("content") == payload && args.at("path") == "/tmp/x",
+                  "pathological payload lost bytes");
+    }
+    failures += check(elapsed < 50, "pathological payload exceeded the time budget");
+    if (elapsed >= 50) { std::cerr << "  elapsed_ms=" << elapsed << '\n'; }
     return failures;
 }
 
@@ -805,8 +952,10 @@ int main() {
     failures += test_multiple_calls();
     failures += test_declared_strings_preserve_text();
     failures += test_string_values_preserve_embedded_tool_markup();
-    failures += test_unrepresentable_parameter_delimiters_fall_back();
+    failures += test_embedded_parameter_delimiters_are_preserved();
     failures += test_xml_candidate_anchor();
+    failures += test_xml_parameter_close_disambiguation();
+    failures += test_xml_parameter_close_budget();
     failures += test_declared_json_types();
     failures += test_boolean_boundary();
     failures += test_exact_integer_boundary();
