@@ -32,6 +32,11 @@ std::string py_escape_string(std::string_view text) {
         case '\n': out += "\\n"; ++index; continue;
         case '\f': out += "\\f"; ++index; continue;
         case '\r': out += "\\r"; ++index; continue;
+        // jinja's htmlsafe pass, emitted in one pass instead of four whole-string rewrites.
+        case '<': out += "\\u003c"; ++index; continue;
+        case '>': out += "\\u003e"; ++index; continue;
+        case '&': out += "\\u0026"; ++index; continue;
+        case '\'': out += "\\u0027"; ++index; continue;
         default: break;
         }
         // Python json.dumps(ensure_ascii=True) escapes C0 controls and DEL (U+007F).
@@ -194,22 +199,6 @@ std::string tojson_oracle(const njson& value) {
             out += tojson_oracle(*entries[i].second);
         }
         out += "}";
-    }
-    for (const auto& [from, to] :
-         std::vector<std::pair<std::string, std::string>>{
-             {std::string("<"), std::string("\\u003c")},
-             {std::string(">"), std::string("\\u003e")},
-             {std::string("&"), std::string("\\u0026")},
-             {std::string("'"), std::string("\\u0027")}}) {
-        std::string replaced;
-        std::size_t index = 0;
-        while (true) {
-            const std::size_t found = out.find(from, index);
-            if (found == std::string::npos) { replaced += out.substr(index); break; }
-            replaced += out.substr(index, found - index) + to;
-            index = found + from.size();
-        }
-        out = std::move(replaced);
     }
     return out;
 }
