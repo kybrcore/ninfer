@@ -89,6 +89,47 @@ request is waiting or prefilling. A peer whose TCP stack remains connected and a
 cannot be distinguished from a reading application; proxies must close their upstream NInfer
 connection when the downstream client disappears.
 
+## Chat template styles
+
+`--chat-style` freezes the prompt renderer for the whole server lifetime. The default `artifact`
+uses the semantics compiled for the template embedded in the loaded `.ninfer`;
+`froggeric-v22.5` replaces rendering with the compiled
+[Froggeric v22.5](https://huggingface.co/froggeric/Qwen-Fixed-Chat-Templates/tree/855bffc49448e299789730ff92c9b8d834d6cc14)
+semantics. The artifact must still pass its usual template validation under either style, and HTTP
+requests cannot switch styles. The resolved value appears in the startup log line and in the
+`server_start` JSONL record.
+
+Under `froggeric-v22.5`, Chat Completions and Responses additionally accept these
+`chat_template_kwargs`:
+
+| Option | Type / default | Effect |
+|---|---|---|
+| `preserve_reasoning` | boolean / template default `true` | alias of `preserve_thinking`; conflicting values are rejected |
+| `auto_disable_thinking_with_tools` | boolean / `false` | closes thinking when the request declares tools |
+| `tool_call_format` | `xml` or `json` / `xml` | selects the tool-call instruction, history serialization, and output parser |
+| `max_tool_arg_chars` | non-negative integer / `0` | truncates each XML tool-call argument; `0` disables |
+| `max_tool_response_chars` | non-negative integer / `0` | truncates tool results; JSON-object payloads are exempt; `0` disables |
+
+The style reports `low`, `medium`, and `xhigh` effort with a `medium` default. On top of the
+existing `none` handling, `minimal` maps to `low` and `high`/`max` map to `xhigh`; the artifact
+style keeps rejecting those aliases. `tool_call_format: "json"` is a non-strict wire format: the
+prompt asks for a JSON object inside `<tool_call>` and the parser validates the wrapper, the
+`name`/`arguments` shape, and the active tool set, but no JSON Schema is enforced during decoding.
+`strict:true`, `response_format: {"type":"json_schema"}`, and grammar/guided decoding remain
+rejected.
+
+Known boundaries of the compiled renderer, all outside the fixture byte-parity surface:
+
+- tool-call `arguments` arrive as JSON strings; an object string is normalized through the
+  template's mapping branch (sorted keys, Python `tojson` spacing) instead of being emitted
+  verbatim, and a non-object XML argument string is rejected;
+- integers beyond `uint64` lose precision because the JSON parser stores them as doubles, and
+  some float spellings differ from Python's `repr` (for example `1e15`); tool schemas should avoid
+  both;
+- unknown `role` values cannot be represented and are rejected;
+- `max_tool_response_chars` that would truncate or drop a media placeholder is rejected because the
+  Processor expands exactly the placeholder byte range.
+
 ## OpenAI Chat Completions
 
 ```bash
@@ -126,7 +167,9 @@ The endpoint supports:
   function-call history;
 - the top-level `reasoning_effort` field;
 - `enable_thinking` and `preserve_thinking`, either at top level or in
-  `chat_template_kwargs`;
+  `chat_template_kwargs`; the `froggeric-v22.5` style additionally accepts
+  `preserve_reasoning`, `auto_disable_thinking_with_tools`, `tool_call_format`,
+  `max_tool_arg_chars`, and `max_tool_response_chars` (see "Chat template styles");
 - Assistant `reasoning_content` and `reasoning` history aliases.
 
 Options whose observable behavior the Engine cannot provide are rejected when they request that
@@ -154,7 +197,8 @@ template cannot represent.
 For commonly generated OpenAI-compatible payloads, `repetition_penalty` is accepted only at its
 neutral value `1`, and `mm_processor_kwargs` when empty or containing only null values. String-form
 image/video URLs are also accepted. Other non-null `chat_template_kwargs` are rejected rather than
-silently changing prompt semantics.
+silently changing prompt semantics; the `froggeric-v22.5` style exposes the additional keys listed
+in "Chat template styles".
 
 Malformed protocol values return field-specific HTTP 400 errors. Invalid media sources, bytes, or
 decoded content use `invalid_media`; remote fetch and timeout failures retain their dedicated
@@ -224,7 +268,8 @@ not promise that the model will emit nonempty content or a tool call after the m
 
 For Chat Completions, `reasoning_effort: "none"` disables thinking. `low`, `medium`, and `xhigh`
 select the corresponding template effort when available. The other OpenAI protocol values
-`minimal`, `high`, and `max` are parsed but rejected when the loaded template does not expose them.
+`minimal`, `high`, and `max` are parsed but rejected when the loaded template does not expose them;
+under `froggeric-v22.5` they map to `low` and `xhigh` and the template default is `medium`.
 `enable_thinking` controls the same new-turn thinking switch; a contradictory combination with
 `reasoning_effort` returns `conflicting_template_option`.
 
@@ -421,8 +466,13 @@ wire response contains typed `output` Items.
 | `top_p` | finite number in `[0,1]` |
 | `metadata` | at most 16 string pairs; keys at most 64 characters and values at most 512 |
 | `client_metadata` | Codex client extension; an object or `null`, accepted as opaque tracing metadata with no generation effect |
-| `reasoning.effort` | `none` disables thinking; `low`, `medium`, or `xhigh` selects an effort exposed by the loaded chat template; `minimal`, `high`, and `max` return `reasoning_effort_not_supported` for the registered templates |
+| `reasoning.effort` | `none` disables thinking; `low`, `medium`, or `xhigh` selects an effort exposed by the loaded chat template; `minimal`, `high`, and `max` return `reasoning_effort_not_supported` for the registered templates, and map to `low`/`xhigh` under `froggeric-v22.5` |
 | `chat_template_kwargs.preserve_thinking` | optional boolean controlling whether closed-turn reasoning remains in reconstructed prompts |
+| `chat_template_kwargs.preserve_reasoning` | `froggeric-v22.5` alias of `preserve_thinking`; conflicting values are rejected |
+| `chat_template_kwargs.auto_disable_thinking_with_tools` | `froggeric-v22.5` boolean closing thinking when the request declares tools |
+| `chat_template_kwargs.tool_call_format` | `froggeric-v22.5` `xml` or `json` tool-call format; JSON is non-strict |
+| `chat_template_kwargs.max_tool_arg_chars` | `froggeric-v22.5` non-negative XML argument truncation limit |
+| `chat_template_kwargs.max_tool_response_chars` | `froggeric-v22.5` non-negative tool-result truncation limit; JSON-object payloads are exempt |
 | `preserve_thinking` | top-level alias for the same option; conflicting values are rejected |
 | `text.format` | omitted or `{"type":"text"}` only |
 | `tools` | direct function definitions or namespace groups containing function definitions; see below |
@@ -789,6 +839,7 @@ The table lists executable defaults. The startup example selects a long-context 
 | `--draft-tokens N` | MTP `1..5`; DFlash/DFlash2 `1..15` | unset |
 | `--lm-head-draft` | optimized proposal head | off |
 | `--default-max-tokens N` | output limit when omitted by a request | `8192` |
+| `--chat-style artifact\|froggeric-v22.5` | frozen prompt renderer for the server lifetime | `artifact` |
 | `--default-thinking-budget N` | positive thinking cap inherited by thinking-enabled requests | unset |
 | `--vision` | enable media input and load Vision GPU allocations | off |
 | `--no-cuda-graph` | disable CUDA Graph decode | graphs on |
