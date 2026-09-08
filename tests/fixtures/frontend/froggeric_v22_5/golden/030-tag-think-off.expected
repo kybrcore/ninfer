@@ -1,0 +1,15 @@
+<|im_start|>user
+do it<|im_end|>
+<|im_start|>assistant
+<think>
+R
+</think>
+
+B<|im_end|>
+<|im_start|>user
+again<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+

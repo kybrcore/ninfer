@@ -1,0 +1,12 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ],
+ "kwargs": {
+  "enable_thinking": false,
+  "reasoning_effort": "xhigh"
+ }
+}

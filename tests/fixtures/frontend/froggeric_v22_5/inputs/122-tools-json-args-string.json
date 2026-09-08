@@ -1,0 +1,50 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": "{\"city\": \"Paris\"}"
+     }
+    }
+   ]
+  }
+ ],
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "get_weather",
+    "description": "Get weather for a city",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      },
+      "units": {
+       "type": "string",
+       "enum": [
+        "c",
+        "f"
+       ]
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  }
+ ],
+ "kwargs": {
+  "tool_call_format": "json"
+ }
+}
