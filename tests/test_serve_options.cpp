@@ -358,6 +358,20 @@ int main() {
     failures += check(!secret_present, "startup argv retained the API key");
     failures += check(redaction_present, "startup argv omitted the API-key redaction marker");
 
+    failures += check(defaults.chat_style == ninfer::ChatStyle::Artifact,
+                      "serve chat style does not default to artifact");
+    const ServeOptions v225 =
+        parse({"ninfer-serve", "model.ninfer", "--chat-style", "froggeric-v22.5"});
+    failures += check(v225.chat_style == ninfer::ChatStyle::FroggericV225,
+                      "--chat-style froggeric-v22.5 was not parsed");
+    failures += check(serve_usage_text("ninfer-serve").find("--chat-style") != std::string::npos,
+                      "serve help omits --chat-style");
+    bool invalid_style_rejected = false;
+    try {
+        (void)parse({"ninfer-serve", "model.ninfer", "--chat-style", "froggeric-v22"});
+    } catch (const std::invalid_argument&) { invalid_style_rejected = true; }
+    failures += check(invalid_style_rejected, "serve accepted an unknown chat style");
+
     if (failures == 0) { std::cout << "ok\n"; }
     return failures == 0 ? 0 : 1;
 }
