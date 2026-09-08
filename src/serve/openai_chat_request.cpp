@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
-#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -799,11 +798,7 @@ struct TemplateOptions {
     std::optional<bool> enable_thinking;
     std::optional<bool> preserve_thinking;
     // Froggeric v22.5 extensions; only accepted when the engine style is froggeric-v22.5.
-    std::optional<bool> preserve_reasoning;
-    std::optional<bool> auto_disable_thinking_with_tools;
-    std::optional<bool> json_tool_format; // tool_call_format == "json"
-    std::optional<std::uint32_t> max_tool_arg_chars;
-    std::optional<std::uint32_t> max_tool_response_chars;
+    FroggericV225TemplateOptions froggeric_v225;
 };
 
 TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_style) {
@@ -823,11 +818,7 @@ TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_
     for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
         const bool is_base =
             iterator.key() == "enable_thinking" || iterator.key() == "preserve_thinking";
-        const bool is_v225 =
-            iterator.key() == "preserve_reasoning" ||
-            iterator.key() == "auto_disable_thinking_with_tools" ||
-            iterator.key() == "tool_call_format" || iterator.key() == "max_tool_arg_chars" ||
-            iterator.key() == "max_tool_response_chars";
+        const bool is_v225 = is_froggeric_v225_template_key(iterator.key());
         // Null values are neutral: accepted for unknown keys (matching the pre-existing
         // behavior) and for known keys alike; only non-null values are validated.
         const bool accepted = iterator.value().is_null() || is_base ||
@@ -853,50 +844,9 @@ TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_
     merge("enable_thinking", output.enable_thinking);
     merge("preserve_thinking", output.preserve_thinking);
     if (chat_style == ninfer::ChatStyle::FroggericV225) {
-        output.preserve_reasoning = get_optional_bool(kwargs, "preserve_reasoning");
-        output.auto_disable_thinking_with_tools =
-            get_optional_bool(kwargs, "auto_disable_thinking_with_tools");
-        if (kwargs.contains("tool_call_format") && !kwargs.at("tool_call_format").is_null()) {
-            const Json& format = kwargs.at("tool_call_format");
-            if (!format.is_string()) {
-                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
-                            "chat_template_kwargs");
-            }
-            const std::string value = format.get<std::string>();
-            if (value == "xml") {
-                output.json_tool_format = false;
-            } else if (value == "json") {
-                output.json_tool_format = true;
-            } else {
-                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
-                            "chat_template_kwargs");
-            }
-        }
-        for (const char* key : {"max_tool_arg_chars", "max_tool_response_chars"}) {
-            if (!kwargs.contains(key) || kwargs.at(key).is_null()) { continue; }
-            const Json& value = kwargs.at(key);
-            if (!value.is_number_unsigned()) {
-                bad_request(std::string("chat_template_kwargs.") + key +
-                                " must be a non-negative integer",
-                            "chat_template_kwargs");
-            }
-            const std::uint64_t parsed = value.get<std::uint64_t>();
-            if (parsed > std::numeric_limits<std::uint32_t>::max()) {
-                bad_request(std::string("chat_template_kwargs.") + key + " exceeds uint32",
-                            "chat_template_kwargs");
-            }
-            if (std::string(key) == "max_tool_arg_chars") {
-                output.max_tool_arg_chars = static_cast<std::uint32_t>(parsed);
-            } else {
-                output.max_tool_response_chars = static_cast<std::uint32_t>(parsed);
-            }
-        }
-        // Deterministic conflict: the renderer would silently prefer preserve_reasoning.
-        if (output.preserve_reasoning && output.preserve_thinking &&
-            *output.preserve_reasoning != *output.preserve_thinking) {
-            bad_request("conflicting preserve_reasoning and preserve_thinking values",
-                        "chat_template_kwargs", "conflicting_template_option");
-        }
+        output.froggeric_v225 = parse_froggeric_v225_template_options(kwargs);
+        reject_conflicting_preserve_options(output.froggeric_v225.preserve_reasoning,
+                                            output.preserve_thinking);
     }
     return output;
 }
@@ -979,16 +929,16 @@ OpenAIChatRequest parse_chat_completion_request(const Json& body, const RequestL
     const TemplateOptions template_options = parse_template_options(body, limits.chat_style);
     output.generation.enable_thinking      = template_options.enable_thinking;
     output.generation.preserve_thinking    = template_options.preserve_thinking;
-    output.generation.preserve_reasoning   = template_options.preserve_reasoning;
+    output.generation.preserve_reasoning   = template_options.froggeric_v225.preserve_reasoning;
     output.generation.auto_disable_thinking_with_tools =
-        template_options.auto_disable_thinking_with_tools.value_or(false);
-    if (template_options.json_tool_format) {
+        template_options.froggeric_v225.auto_disable_thinking_with_tools.value_or(false);
+    if (template_options.froggeric_v225.json_tool_format) {
         output.generation.tool_call_format = ninfer::ToolCallFormat::Json;
     }
-    output.generation.max_tool_arg_chars      =
-        template_options.max_tool_arg_chars.value_or(0);
+    output.generation.max_tool_arg_chars =
+        template_options.froggeric_v225.max_tool_arg_chars.value_or(0);
     output.generation.max_tool_response_chars =
-        template_options.max_tool_response_chars.value_or(0);
+        template_options.froggeric_v225.max_tool_response_chars.value_or(0);
     apply_openai_prompt_cache_policy(output.generation, cache_policy);
     return output;
 }
