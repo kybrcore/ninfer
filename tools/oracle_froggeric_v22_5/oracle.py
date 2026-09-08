@@ -90,6 +90,82 @@ def render_input(templates, path):
     return pretty, None
 
 
+def cxx_string_view_constant(source, name):
+    import codecs
+    import re
+    match = re.search(
+        r'inline constexpr std::string_view %s\s*=\s*(.*?);' % re.escape(name), source, re.S)
+    if match is None:
+        raise KeyError('C++ constant not found: %s' % name)
+    literals = re.findall(r'"((?:[^"\\]|\\.)*)"', match.group(1))
+    if not literals:
+        raise ValueError('no string literals in %s' % name)
+    return codecs.decode(''.join(literals), 'unicode_escape')
+
+
+def check_prompt_constants(templates):
+    """Mechanically diff the compiled C++ instruction texts against the pinned template.
+
+    The renderer must never hand-copy instruction text: this re-renders the template for the
+    four tool-instruction combinations plus the low/xhigh reasoning instructions and compares
+    the exact bytes with the constants in froggeric_v22_5_prompts.h.
+    """
+    repo = os.path.abspath(os.path.join(FIXTURE_DIR, '..', '..', '..', '..'))
+    header_path = os.path.join(repo, 'src', 'targets', 'qwen3_6', 'impl', 'frontend',
+                               'froggeric_v22_5_prompts.h')
+    with open(header_path, 'r', encoding='utf-8') as fh:
+        header = fh.read()
+
+    tool = {'type': 'function', 'function': {
+        'name': 'get_weather', 'description': 'Get weather for a city',
+        'parameters': {'type': 'object', 'properties': {'city': {'type': 'string'}},
+                       'required': ['city']}}}
+    failures = 0
+
+    header_expected = ('# Tools\n\nYou have access to the following functions:\n\n<tools>')
+    if cxx_string_view_constant(header, 'kToolsHeader') != header_expected:
+        print('FAIL kToolsHeader differs from the pinned template')
+        failures += 1
+
+    for thinking in (True, False):
+        for tool_format in ('xml', 'json'):
+            rendered = templates['chat_template.jinja'].render(
+                messages=[{'role': 'user', 'content': 'q'}], tools=[tool],
+                enable_thinking=thinking, tool_call_format=tool_format,
+                add_generation_prompt=True)
+            start = rendered.index('</tools>') + len('</tools>')
+            end = rendered.index('<|im_end|>')
+            expected = rendered[start:end]
+            if tool_format == 'json':
+                name = 'kJsonInstructionsThinking' if thinking else 'kJsonInstructionsOff'
+            else:
+                name = 'kXmlInstructionsThinking' if thinking else 'kXmlInstructionsOff'
+            actual = cxx_string_view_constant(header, name)
+            if actual != expected:
+                print('FAIL %s differs from the pinned template' % name)
+                for i, (a, b) in enumerate(zip(actual, expected)):
+                    if a != b:
+                        print('  first diff at byte %d: %r vs %r' % (i, actual[i:i+40], expected[i:i+40]))
+                        break
+                else:
+                    print('  length %d vs %d' % (len(actual), len(expected)))
+                failures += 1
+
+    for effort, name in (('low', 'kLowReasoningInstructions'),
+                         ('xhigh', 'kXHighReasoningInstructions')):
+        rendered = templates['chat_template.jinja'].render(
+            messages=[{'role': 'user', 'content': 'q'}], reasoning_effort=effort,
+            add_generation_prompt=True)
+        start = len('<|im_start|>system\n')
+        end = rendered.index('<|im_end|>')
+        expected = rendered[start:end]
+        actual = cxx_string_view_constant(header, name)
+        if actual != expected:
+            print('FAIL %s differs from the pinned template' % name)
+            failures += 1
+    return failures
+
+
 def main(argv):
     mode = argv[1] if len(argv) > 1 else 'check'
     check_fixtures()
@@ -133,6 +209,8 @@ def main(argv):
                 failures += 1
                 continue
             print('PASS %s (%d bytes)' % (name, len(pretty)))
+    if mode == 'check':
+        failures += check_prompt_constants(templates)
     if failures:
         sys.exit('%d input(s) failed' % failures)
     print('all %d inputs %s' % (len(inputs), 'generated' if mode == 'generate' else 'pass'))

@@ -479,6 +479,20 @@ w('166-tool-media', {'messages': [
      'tool_calls': tc(function={'name': 'f', 'arguments': {}})},
     {'role': 'tool', 'content': [{'type': 'text', 'text': 'captured '}, {'type': 'image'}]}],
     'tools': [TOOL]})
+# The multi_step_tool pre-pass renders user content without vision placeholders: a user
+# message whose literal text is a tool response counts as a tool query, so preserve_thinking
+# keeps reasoning from every assistant turn (last_query_index stays 0).
+w('167-user-tool-response-literal', {'messages': [
+    {'role': 'assistant', 'content': 'a0', 'reasoning_content': 'r0'},
+    {'role': 'assistant', 'content': 'a1', 'reasoning_content': 'r1'},
+    {'role': 'user', 'content': '<tool_response>{"ok":true}</tool_response>'},
+    {'role': 'assistant', 'content': 'a2', 'reasoning_content': 'r2'}],
+    'kwargs': {'preserve_thinking': False}})
+# Python str.strip() removes 3- and 4-byte whitespace; a trailing emoji must survive intact.
+w('168-trailing-unicode-whitespace', {'messages': [
+    {'role': 'user', 'content': '\u3000\u00a0hello\u2028\u3000'}]})
+w('169-trailing-emoji', {'messages': [
+    {'role': 'user', 'content': 'hi\U0001F600'}]})
 
 # ---------------- long multi-step (>50 messages) ----------------
 def long_tool_loop(n):
