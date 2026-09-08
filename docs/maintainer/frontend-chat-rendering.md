@@ -158,7 +158,34 @@ ctest --test-dir build --output-on-failure \
 The artifact path is protected by `ninfer_qwen3_6_frontend_test`, which must pass unchanged; the
 artifact renderer shares the fragment contract but not the v22.5 semantics.
 
-## 6. Known boundaries
+## 6. Performance
+
+`tests/targets/qwen3_6/bench_froggeric_v22_5.cpp` is a manual benchmark (built with the test
+suite, not registered with ctest). It measures median/worst render time and peak heap allocation
+(global new/delete proxy) for 1K/100K/500K/2M inputs, with and without inline tags, plus image,
+tool-format and preserve variants:
+
+```bash
+cmake --build build --target ninfer_qwen3_6_froggeric_v22_5_bench
+./build/tests/ninfer_qwen3_6_froggeric_v22_5_bench
+```
+
+Representative run (clang -O2, Apple M-series, 2026-09-08):
+
+| Case | Input | Median | Peak | Peak/input |
+|---|---:|---:|---:|---:|
+| plain 100K | 100 KiB | 36 us | 404 KiB | 4.0x |
+| tags 100K | 100 KiB | 395 us | 1.8 MiB | 18.0x |
+| plain 2M | 2 MiB | 0.8 ms | 8 MiB | 4.0x |
+| tags 2M | 2 MiB | 8.3 ms | 36 MiB | 18.0x |
+
+The tagged path pays 8 bytes per input byte for the `TagStripper` origin map plus `remove_all`'s
+copy of it. The plan's decision gate (>2x input) is met, but the absolute cost at production
+sizes (<=100 KiB -> ~0.4 ms / ~1.8 MiB) is negligible next to prefill, so the per-byte map stays
+and the measured bound is recorded in `froggeric_v22_5/tags.h`. A run-based map is the follow-up
+if multi-megabyte tagged prompts become a workload.
+
+## 7. Known boundaries
 
 - Python numeric serialization is emulated for the shapes tool schemas actually use. Integers beyond
   `uint64` lose precision (the JSON parser stores them as doubles) and some float spellings differ
