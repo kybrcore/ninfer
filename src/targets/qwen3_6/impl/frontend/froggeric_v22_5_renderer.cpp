@@ -814,12 +814,41 @@ RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
         const bool is_instruction  = message.role == ChatRole::System ||
                                      message.role == ChatRole::Developer;
         if (is_instruction) { validate_no_system_media(message); }
-        ContentBlock content =
-            render_content(message, options.add_vision_id, &image_count, &video_count,
-                           &media_count);
+        // Inline tags are stripped per text part BEFORE rendering: the rendered provenance
+        // spans are rebuilt from the stripped text, so they always match the emitted bytes.
+        // (Template parity note: the jinja oracle strips the concatenated render, so a tag
+        // split across two adjacent text parts would not be stripped here; a single tag
+        // inside one text part - the only shape a client can meaningfully send - is.)
+        std::vector<ChatPart> stripped_parts;
+        const ChatMessage* render_message = &message;
+        ChatMessage stripped_message;
         if (is_instruction || message.role == ChatRole::User) {
-            content.text = strip_inline_tags(content.text);
+            bool any_tag = false;
+            for (const ChatPart& part : message.parts) {
+                if (part.kind == ChatPartKind::Text && contains(part.text, "<|think_")) {
+                    any_tag = true;
+                    break;
+                }
+            }
+            if (any_tag) {
+                stripped_message.role    = message.role;
+                stripped_message.reasoning_content = message.reasoning_content;
+                stripped_message.tool_call_id      = message.tool_call_id;
+                stripped_message.tool_calls        = message.tool_calls;
+                for (const ChatPart& part : message.parts) {
+                    if (part.kind == ChatPartKind::Text) {
+                        stripped_message.parts.push_back(
+                            ChatPart::text_part(strip_inline_tags(part.text)));
+                    } else {
+                        stripped_message.parts.push_back(part);
+                    }
+                }
+                render_message = &stripped_message;
+            }
         }
+        ContentBlock content =
+            render_content(*render_message, options.add_vision_id, &image_count, &video_count,
+                           &media_count);
         const auto emit = [&]() {
             out.append_content(content.text, content.literals, content.media);
         };
