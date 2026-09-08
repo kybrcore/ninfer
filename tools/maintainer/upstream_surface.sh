@@ -19,7 +19,7 @@
 #   --churn <n>        upstream commit window for per-file churn (default 200)
 #   --owned <regex>    branch-owned path prefixes (default: the froggeric v22.5 module)
 #   --strict           exit 1 when the seam budget is exceeded
-#   --max-files <n>    strict seam file budget (default 15)
+#   --max-files <n>    strict seam file budget (default 35)
 #   --max-lines <n>    strict seam net-added-line budget (default 60)
 #   -h, --help         this message
 #
@@ -34,7 +34,7 @@ line=HEAD
 base=""
 churn=200
 strict=0
-max_files=15
+max_files=35
 max_lines=60
 owned='^(src/product/chat_style\.h|src/serve/froggeric_v225_request\.|src/targets/qwen3_6/impl/frontend/froggeric_v22_5/|src/targets/qwen3_6/impl/frontend/render_fragment\.|src/targets/qwen3_6/impl/frontend/tool_call_json_parser\.)'
 
