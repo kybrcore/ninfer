@@ -85,7 +85,7 @@ int main(int argc, char** argv) {
 
         serving = true;
         operational_log.server_ready(options.host, options.port, server.public_model_id(),
-                                     !options.api_key.empty());
+                                     !options.api_key.empty(), options.chat_style);
 
         const bool ok = server.listen();
         g_server.store(nullptr);

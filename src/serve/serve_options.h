@@ -52,6 +52,8 @@ struct ServeOptions {
     bool enable_vision      = false;
     bool use_cuda_graph     = true;
     bool allow_prefix_reuse = true;
+    // Frozen chat-template renderer for the whole server lifetime (no request-level switching).
+    ChatStyle chat_style = ChatStyle::Artifact;
     bool enable_thinking =
         true; // default thinking mode for the generation prompt (--no-thinking opts out)
     bool preserve_thinking = false;

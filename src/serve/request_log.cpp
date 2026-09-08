@@ -1,4 +1,5 @@
 #include "serve/request_log.h"
+#include "product/chat_style.h"
 #include "product/logging/pretty_format.h"
 #include "product/speculative_options.h"
 
@@ -473,6 +474,7 @@ std::string format_server_start_json(
              {"kv_cache", kv_cache_name(engine_options.kv_cache)},
              {"vision", engine_options.enable_vision},
              {"cuda_graph", engine_options.use_cuda_graph},
+             {"chat_style", product::chat_style_name(engine_options.chat_style)},
              {"prefix_reuse", options.allow_prefix_reuse},
              {"speculative_backend",
               product::speculative_backend_name(engine_options.speculative.backend)},

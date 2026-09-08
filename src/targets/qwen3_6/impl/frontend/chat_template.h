@@ -111,6 +111,13 @@ struct ChatRenderOptions {
     bool add_vision_id = false;
     std::vector<std::string> tool_jsons;
     std::vector<PromptCacheMarker> cache_markers;
+    // Froggeric v22.5 request options. The Artifact renderer ignores them; the v22.5 renderer
+    // consumes them with the template's default/alias semantics.
+    std::optional<bool> preserve_reasoning;
+    bool auto_disable_thinking_with_tools = false;
+    ToolCallFormat tool_call_format       = ToolCallFormat::Xml;
+    std::uint32_t max_tool_arg_chars      = 0;
+    std::uint32_t max_tool_response_chars = 0;
 };
 
 struct RewriteCheckpointByteSpec {
@@ -136,11 +143,18 @@ struct RenderedChat {
 enum class ChatTemplateSemantics : std::uint8_t {
     ThinkingToggle,
     ReasoningEffort,
+    FroggericV225,
 };
+
+// Compiled qwen3.8-froggeric-v22.5 renderer (see tests/fixtures/frontend/froggeric_v22_5 for the
+// pinned upstream oracle the byte parity is proven against).
+RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
+                                   const ChatRenderOptions& options);
 
 class CompiledChatTemplate {
 public:
     [[nodiscard]] static CompiledChatTemplate resolve(std::string_view source);
+    [[nodiscard]] static CompiledChatTemplate froggeric_v225() noexcept;
 
     [[nodiscard]] PromptCapabilities capabilities() const noexcept;
     [[nodiscard]] RenderedChat render(const std::vector<ChatMessage>& messages,
