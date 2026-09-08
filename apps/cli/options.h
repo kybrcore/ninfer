@@ -34,6 +34,7 @@ struct Options {
     bool enable_thinking = true;
     std::optional<std::uint32_t> thinking_budget;
     std::optional<ReasoningEffort> reasoning_effort;
+    ChatStyle chat_style = ChatStyle::Artifact;
 
     std::vector<TokenId> stop_token_ids;
     std::vector<StopString> stop_strings;

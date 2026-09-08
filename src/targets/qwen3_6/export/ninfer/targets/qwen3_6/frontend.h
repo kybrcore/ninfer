@@ -21,6 +21,9 @@ struct FrontendOptions {
     std::size_t media_cache_bytes          = kDefaultMediaCacheBytes;
     std::size_t media_live_bytes           = kDefaultMediaLiveBytes;
     std::uint32_t media_preprocess_threads = 0;
+    // Frozen for the Engine lifetime. Artifact keeps the embedded-template renderer; FroggericV225
+    // selects the compiled froggeric v22.5 renderer (artifact validation still runs first).
+    ChatStyle chat_style                   = ChatStyle::Artifact;
 };
 
 struct FrontendResources;

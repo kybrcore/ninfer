@@ -423,6 +423,10 @@ CompiledChatTemplate CompiledChatTemplate::resolve(std::string_view source) {
                                 sha256_hex(digest) + ")");
 }
 
+CompiledChatTemplate CompiledChatTemplate::froggeric_v225() noexcept {
+    return CompiledChatTemplate(ChatTemplateSemantics::FroggericV225);
+}
+
 PromptCapabilities CompiledChatTemplate::capabilities() const noexcept {
     PromptCapabilities result;
     result.enable_thinking = true;
@@ -432,11 +436,22 @@ PromptCapabilities CompiledChatTemplate::capabilities() const noexcept {
         result.reasoning_effort.xhigh          = true;
         result.reasoning_effort.default_effort = ReasoningEffort::XHigh;
     }
+    if (semantics_ == ChatTemplateSemantics::FroggericV225) {
+        // The v22.5 template defaults its reasoning effort to medium, unlike the artifact's
+        // xhigh default; the style capability surface must not inherit the artifact value.
+        result.reasoning_effort.low            = true;
+        result.reasoning_effort.medium         = true;
+        result.reasoning_effort.xhigh          = true;
+        result.reasoning_effort.default_effort = ReasoningEffort::Medium;
+    }
     return result;
 }
 
 RenderedChat CompiledChatTemplate::render(const std::vector<ChatMessage>& messages,
                                           ChatRenderOptions options) const {
+    if (semantics_ == ChatTemplateSemantics::FroggericV225) {
+        return render_froggeric_v225(messages, options);
+    }
     if (messages.empty()) { throw std::invalid_argument("chat messages must not be empty"); }
 
     const bool continue_final_assistant =

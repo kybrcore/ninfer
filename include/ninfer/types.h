@@ -148,9 +148,18 @@ struct ContextCostOptions {
     std::filesystem::path preset_path;
 };
 
+// Frozen at Engine start. Artifact renders with the .ninfer's embedded template semantics;
+// FroggericV225 replaces rendering with the compiled qwen3.8-froggeric-v22.5 semantics while
+// still requiring the artifact to pass its usual template validation.
+enum class ChatStyle : std::uint8_t {
+    Artifact     = 0,
+    FroggericV225,
+};
+
 struct EngineOptions {
     std::filesystem::path artifact_path;
     EnginePurpose purpose              = EnginePurpose::Generation;
+    ChatStyle chat_style               = ChatStyle::Artifact;
     int device                         = 0;
     std::uint32_t max_context          = 2048; // Logical ceiling of one request or score window.
     KvCapacityPolicy kv_capacity       = KvCapacityPolicy::explicit_capacity(2048);
@@ -401,6 +410,13 @@ enum class PromptContinuationMode : std::uint8_t {
     ContinueFinalAssistant,
 };
 
+// Tool-call history/instruction serialization for the compiled chat renderers. XML is the
+// default; JSON is a non-strict alternate format (no JSON Schema guarantees).
+enum class ToolCallFormat : std::uint8_t {
+    Xml  = 0,
+    Json,
+};
+
 struct PromptOptions {
     PromptContinuationMode continuation = PromptContinuationMode::NewAssistantTurn;
     bool enable_thinking                = true;
@@ -408,6 +424,14 @@ struct PromptOptions {
     bool preserve_thinking = false;
     bool add_vision_id     = false;
     std::vector<std::string> tool_jsons;
+    // Froggeric v22.5 request options. The Artifact renderer deliberately ignores them, so
+    // defaults keep every existing prompt byte-identical.
+    // Alias of preserve_thinking; when set, conflicts with preserve_thinking are an error.
+    std::optional<bool> preserve_reasoning;
+    bool auto_disable_thinking_with_tools = false;
+    ToolCallFormat tool_call_format       = ToolCallFormat::Xml;
+    std::uint32_t max_tool_arg_chars      = 0;
+    std::uint32_t max_tool_response_chars = 0;
 };
 
 enum class CacheRetentionHint : std::uint8_t {
