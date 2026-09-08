@@ -372,6 +372,7 @@ if(NINFER_BUILD_SERVE)
   add_library(ninfer_serve STATIC
     serve/http_transport.cpp
     serve/request_validation.cpp
+    serve/froggeric_v225_request.cpp
     serve/openai_chat_request.cpp
     serve/openai_chat_response.cpp
     serve/openai_chat_http.cpp
