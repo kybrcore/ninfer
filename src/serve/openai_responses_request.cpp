@@ -987,11 +987,7 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
     }
     for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
         const bool is_base = iterator.key() == "preserve_thinking";
-        const bool is_v225 =
-            iterator.key() == "preserve_reasoning" ||
-            iterator.key() == "auto_disable_thinking_with_tools" ||
-            iterator.key() == "tool_call_format" || iterator.key() == "max_tool_arg_chars" ||
-            iterator.key() == "max_tool_response_chars";
+        const bool is_v225 = is_froggeric_v225_template_key(iterator.key());
         // Null values are neutral: accepted for unknown keys (matching the pre-existing
         // behavior) and for known keys alike; only non-null values are validated.
         const bool accepted = iterator.value().is_null() || is_base ||
@@ -1007,76 +1003,32 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
         }
     }
     if (chat_style == ninfer::ChatStyle::FroggericV225) {
-        if (kwargs.contains("preserve_reasoning") &&
-            !kwargs.at("preserve_reasoning").is_null()) {
-            if (!kwargs.at("preserve_reasoning").is_boolean()) {
-                bad_request("chat_template_kwargs.preserve_reasoning must be a boolean or null",
-                            "chat_template_kwargs");
-            }
-            out.generation.preserve_reasoning = kwargs.at("preserve_reasoning").get<bool>();
+        const FroggericV225TemplateOptions v225 = parse_froggeric_v225_template_options(kwargs);
+        out.generation.preserve_reasoning = v225.preserve_reasoning;
+        out.generation.auto_disable_thinking_with_tools =
+            v225.auto_disable_thinking_with_tools.value_or(false);
+        if (v225.json_tool_format) {
+            out.generation.tool_call_format = ninfer::ToolCallFormat::Json;
         }
-        if (kwargs.contains("auto_disable_thinking_with_tools") &&
-            !kwargs.at("auto_disable_thinking_with_tools").is_null()) {
-            if (!kwargs.at("auto_disable_thinking_with_tools").is_boolean()) {
-                bad_request(
-                    "chat_template_kwargs.auto_disable_thinking_with_tools must be a boolean",
-                    "chat_template_kwargs");
-            }
-            out.generation.auto_disable_thinking_with_tools =
-                kwargs.at("auto_disable_thinking_with_tools").get<bool>();
+        out.generation.max_tool_arg_chars      = v225.max_tool_arg_chars.value_or(0);
+        out.generation.max_tool_response_chars = v225.max_tool_response_chars.value_or(0);
+    }
+    if (kwargs.contains("preserve_thinking") && !kwargs.at("preserve_thinking").is_null()) {
+        if (!kwargs.at("preserve_thinking").is_boolean()) {
+            bad_request("chat_template_kwargs.preserve_thinking must be a boolean or null",
+                        "chat_template_kwargs");
         }
-        if (kwargs.contains("tool_call_format") && !kwargs.at("tool_call_format").is_null()) {
-            const Json& format = kwargs.at("tool_call_format");
-            if (!format.is_string()) {
-                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
-                            "chat_template_kwargs");
-            }
-            const std::string value = format.get<std::string>();
-            if (value == "json") {
-                out.generation.tool_call_format = ninfer::ToolCallFormat::Json;
-            } else if (value != "xml") {
-                bad_request("chat_template_kwargs.tool_call_format must be \"xml\" or \"json\"",
-                            "chat_template_kwargs");
-            }
+        const bool nested = kwargs.at("preserve_thinking").get<bool>();
+        if (out.generation.preserve_thinking && *out.generation.preserve_thinking != nested) {
+            bad_request("conflicting preserve_thinking values", "preserve_thinking",
+                        "conflicting_template_option");
         }
-        for (const char* key : {"max_tool_arg_chars", "max_tool_response_chars"}) {
-            if (!kwargs.contains(key) || kwargs.at(key).is_null()) { continue; }
-            const Json& value = kwargs.at(key);
-            if (!value.is_number_unsigned()) {
-                bad_request(std::string("chat_template_kwargs.") + key +
-                                " must be a non-negative integer",
-                            "chat_template_kwargs");
-            }
-            const std::uint64_t parsed = value.get<std::uint64_t>();
-            if (parsed > std::numeric_limits<std::uint32_t>::max()) {
-                bad_request(std::string("chat_template_kwargs.") + key + " exceeds uint32",
-                            "chat_template_kwargs");
-            }
-            if (std::string(key) == "max_tool_arg_chars") {
-                out.generation.max_tool_arg_chars = static_cast<std::uint32_t>(parsed);
-            } else {
-                out.generation.max_tool_response_chars = static_cast<std::uint32_t>(parsed);
-            }
-        }
+        out.generation.preserve_thinking = nested;
     }
-    if (!kwargs.contains("preserve_thinking") || kwargs.at("preserve_thinking").is_null()) {
-        return;
-    }
-    if (!kwargs.at("preserve_thinking").is_boolean()) {
-        bad_request("chat_template_kwargs.preserve_thinking must be a boolean or null",
-                    "chat_template_kwargs");
-    }
-    const bool nested = kwargs.at("preserve_thinking").get<bool>();
-    if (out.generation.preserve_thinking && *out.generation.preserve_thinking != nested) {
-        bad_request("conflicting preserve_thinking values", "preserve_thinking",
-                    "conflicting_template_option");
-    }
-    out.generation.preserve_thinking = nested;
-    if (out.generation.preserve_reasoning && *out.generation.preserve_reasoning !=
-            *out.generation.preserve_thinking) {
-        bad_request("conflicting preserve_reasoning and preserve_thinking values",
-                    "chat_template_kwargs", "conflicting_template_option");
-    }
+    // The renderer prefers preserve_reasoning, so a conflicting pair must be rejected here
+    // regardless of whether the caller supplied the alias at top level or in the kwargs.
+    reject_conflicting_preserve_options(out.generation.preserve_reasoning,
+                                        out.generation.preserve_thinking);
 }
 
 void parse_truncation(const Json& body) {

@@ -642,6 +642,100 @@ int test_all_or_nothing_structural_commit() {
                           "partially valid tool-call region was partially committed");
 }
 
+std::shared_ptr<const fi::ToolCallOutputContract>
+json_contract(const std::vector<std::string>& definitions) {
+    return fi::build_tool_call_output_contract(
+        std::span<const std::string>(definitions.data(), definitions.size()), true, true);
+}
+
+int test_json_tool_calls() {
+    const auto contract =
+        json_contract({tool_definition("f", Json{{"a", Json{{"type", "integer"}}}}),
+                       tool_definition("g", Json{{"b", Json{{"type", "string"}}}})});
+    int failures = 0;
+
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "hello<tool_call>{\"name\":\"f\",\"arguments\":{\"a\":1}}</tool_call>", 64,
+            *contract);
+        failures += check(parsed.is_tool_call_response && parsed.content == "hello" &&
+                              parsed.tool_calls.size() == 1 &&
+                              parsed.tool_calls[0].name == "f" &&
+                              parsed.tool_calls[0].arguments_json == "{\"a\":1}",
+                          "json single call with leading content");
+    }
+    {
+        const std::string text =
+            "<tool_call>{\"name\":\"f\",\"arguments\":{\"a\":1}}</tool_call>\n "
+            "<tool_call>{\"name\":\"g\",\"arguments\":{\"b\":\"x\"}}</tool_call>";
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, *contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 2 &&
+                              parsed.tool_calls[1].name == "g" &&
+                              parsed.tool_calls[1].arguments_json == "{\"b\":\"x\"}",
+                          "json consecutive calls");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"name\":\"f\",\"arguments\":\"{\\\"a\\\":1}\"}</tool_call>"
+            "<tool_call>{\"name\":\"g\"}</tool_call>",
+            64, *contract);
+        failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 2 &&
+                              parsed.tool_calls[0].arguments_json == "{\"a\":1}" &&
+                              parsed.tool_calls[1].arguments_json.empty(),
+                          "json string and missing arguments");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"name\":\"g\",\"arguments\":{\"b\":\"h\\u00e9llo\"}}</tool_call>",
+            64, *contract);
+        failures += check(parsed.is_tool_call_response &&
+                              parsed.tool_calls[0].arguments_json.find("héllo") !=
+                                  std::string::npos,
+                          "json unicode arguments");
+    }
+    for (const auto& [text, reason] : std::vector<std::pair<std::string,
+                                                            ninfer::ToolCallParseFallbackReason>>{
+             {"<tool_call>{\"name\":\"nope\",\"arguments\":{}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::UndeclaredTool},
+             {"<tool_call>{\"name\":\"f\",\"arguments\":{}}",
+              ninfer::ToolCallParseFallbackReason::MalformedStructure},
+             {"<tool_call>[1,2]</tool_call>",
+              ninfer::ToolCallParseFallbackReason::MalformedStructure},
+             {"<tool_call>{\"name\":\"f\",\"arguments\":{}}</tool_call> trailing",
+              ninfer::ToolCallParseFallbackReason::TrailingContent},
+             {"<tool_call>{\"name\":\"\",\"arguments\":{}}</tool_call>",
+              ninfer::ToolCallParseFallbackReason::InvalidToolName}}) {
+        const auto parsed = fi::parse_qwen_tool_call_output(text, 64, *contract);
+        failures += check(!parsed.is_tool_call_response && parsed.content == text &&
+                              parsed.diagnostics.fallback_reason == reason,
+                          "json fallback reason for: " + text);
+    }
+    {
+        const std::string text =
+            "prefix<tool_call>{\"name\":\"f\",\"arguments\":{\"a\":1}}</tool_call>\n"
+            "<tool_call>{\"name\":\"g\",\"arguments\":{\"b\":\"x\"}}</tool_call>";
+        std::string reference;
+        bool stable = true;
+        for (std::size_t split = 0; split <= text.size(); ++split) {
+            fi::ToolCallOutputDecoder decoder(contract, 64);
+            std::string visible = decoder.feed(text.substr(0, split));
+            visible += decoder.feed(text.substr(split));
+            const auto terminal = decoder.finish();
+            std::string signature = visible + "|" + terminal.content;
+            for (const auto& call : terminal.tool_calls) {
+                signature += "|" + call.name + ":" + call.arguments_json;
+            }
+            if (split == 0) {
+                reference = signature;
+            } else if (signature != reference) {
+                stable = false;
+            }
+        }
+        failures += check(stable, "json decoder is chunk-independent");
+    }
+    return failures;
+}
+
 int test_incremental_valid_and_boolean() {
     fi::ToolCallOutputDecoder legacy(std::make_shared<fi::ToolCallOutputContract>(), 64);
     std::string visible;
@@ -756,6 +850,7 @@ int main() {
     failures += test_incremental_valid_and_boolean();
     failures += test_incremental_fallback_preserves_bytes();
     failures += test_incremental_embedded_parameter_markup();
+    failures += test_json_tool_calls();
     if (failures == 0) { std::cout << "ok\n"; }
     return failures == 0 ? 0 : 1;
 }
