@@ -892,8 +892,15 @@ int test_json_tool_calls() {
             64, *contract);
         failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 2 &&
                               parsed.tool_calls[0].arguments_json == "{\"a\":1}" &&
-                              parsed.tool_calls[1].arguments_json.empty(),
+                              parsed.tool_calls[1].arguments_json == "{}",
                           "json string and missing arguments");
+    }
+    {
+        const auto parsed = fi::parse_qwen_tool_call_output(
+            "<tool_call>{\"name\":\"g\",\"arguments\":null}</tool_call>", 64, *contract);
+        failures += check(parsed.is_tool_call_response &&
+                              parsed.tool_calls[0].arguments_json == "{}",
+                          "json null arguments were not normalized to an empty object");
     }
     {
         const auto parsed = fi::parse_qwen_tool_call_output(
@@ -976,7 +983,7 @@ int test_json_tool_calls_openai_wrapper() {
             "<tool_call>{\"function\":{\"name\":\"g\"}}</tool_call>", 64, *contract);
         failures += check(parsed.is_tool_call_response && parsed.tool_calls.size() == 1 &&
                               parsed.tool_calls[0].name == "g" &&
-                              parsed.tool_calls[0].arguments_json.empty(),
+                              parsed.tool_calls[0].arguments_json == "{}",
                           "wrapped json call without arguments");
     }
     {
