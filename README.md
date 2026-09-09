@@ -20,9 +20,9 @@ NInfer supports five artifact identities. The quick-start commands use Qwen3.8-2
 The artifact identity fixes the exact model and weight profile. Every artifact also embeds the
 tokenizer, chat template, and media frontend resources required by its registered target.
 
-## Branch Lineage & Acknowledgments (`mobile-quasar-yarn`)
+## Branch Lineage & Acknowledgments (`quasar-yarn`)
 
-This branch maintains community contributions on top of `mobile-quasar`:
+This branch maintains community contributions on top of `quasar`:
 
 1. **Upstream Core Engine**:
    - Upstream repository: [Neroued/ninfer](https://github.com/Neroued/ninfer)
@@ -41,7 +41,7 @@ This branch maintains community contributions on top of `mobile-quasar`:
 
 4. **Branch Maintenance & Validation**:
    - Maintained by [kybrcore](https://github.com/kybrcore).
-   - Integrated on top of `mobile-quasar` (MirkoCovizzi mobile lineage + upstream master).
+   - Integrated on top of `quasar` (MirkoCovizzi mobile lineage + upstream master).
    - Verified 100% needle-in-a-haystack retrieval up to 500K context tokens on NVIDIA GeForce RTX 5090 (32 GB) with `--rope-yarn-factor 2.0 --max-context 524288`.
 ## Quick start
 
