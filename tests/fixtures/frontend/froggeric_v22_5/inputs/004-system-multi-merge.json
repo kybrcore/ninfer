@@ -1,0 +1,24 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": "Part A."
+  },
+  {
+   "role": "developer",
+   "content": "Part B."
+  },
+  {
+   "role": "system",
+   "content": "   "
+  },
+  {
+   "role": "system",
+   "content": "Part C."
+  },
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ]
+}

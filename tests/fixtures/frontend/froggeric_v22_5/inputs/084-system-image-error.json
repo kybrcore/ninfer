@@ -1,0 +1,13 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": [
+    {
+     "type": "image"
+    }
+   ]
+  }
+ ],
+ "expect_error": "System message cannot contain images."
+}

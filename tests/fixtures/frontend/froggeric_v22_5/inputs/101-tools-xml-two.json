@@ -1,0 +1,50 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ],
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "zeta_search",
+    "description": "Search the web",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "query": {
+       "type": "string"
+      }
+     }
+    }
+   }
+  },
+  {
+   "type": "function",
+   "function": {
+    "name": "get_weather",
+    "description": "Get weather for a city",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      },
+      "units": {
+       "type": "string",
+       "enum": [
+        "c",
+        "f"
+       ]
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  }
+ ]
+}

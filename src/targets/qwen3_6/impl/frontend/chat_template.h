@@ -1,5 +1,6 @@
 #pragma once
 
+#include "targets/qwen3_6/impl/frontend/render_fragment.h"
 #include "targets/qwen3_6/impl/frontend/tokenizer.h"
 
 #include <ninfer/targets/qwen3_6/prepared_prompt.h>
@@ -29,28 +30,11 @@ enum class ChatPartKind {
     Video,
 };
 
-enum class Modality : std::uint8_t {
-    Image = 1,
-    Video = 2,
-};
-
-struct MediaPlaceholderByteSpec {
-    ByteSpan bytes;
-    Modality modality      = Modality::Image;
-    std::size_t item_index = 0;
-};
-
 struct MediaTokenRunByteSpec {
     ByteSpan bytes;
     Modality modality       = Modality::Image;
     std::size_t item_index  = 0;
     std::size_t frame_index = 0;
-};
-
-struct RenderedFragment {
-    std::string text;
-    std::vector<ByteSpan> literal_spans;
-    std::vector<MediaPlaceholderByteSpec> media_placeholders;
 };
 
 struct MediaData {
@@ -111,6 +95,9 @@ struct ChatRenderOptions {
     bool add_vision_id = false;
     std::vector<std::string> tool_jsons;
     std::vector<PromptCacheMarker> cache_markers;
+    // Froggeric v22.5 request options. The Artifact renderer ignores them; the v22.5 renderer
+    // consumes them with the template's default/alias semantics.
+    FroggericV225Options froggeric_v225;
 };
 
 struct RewriteCheckpointByteSpec {
@@ -131,16 +118,27 @@ struct RenderedChat {
     std::vector<std::optional<std::size_t>> message_boundaries;
     // One rendered byte boundary per requested cache marker.
     std::vector<std::optional<std::size_t>> cache_boundaries;
+    // Thinking state the generation prompt leaves the model in: false when a template-level
+    // option or an inline control tag closed thinking before the generation suffix (empty think
+    // prefill), so the output session must not start in reasoning-split mode.
+    bool generation_starts_in_thinking = true;
 };
 
 enum class ChatTemplateSemantics : std::uint8_t {
     ThinkingToggle,
     ReasoningEffort,
+    FroggericV225,
 };
+
+// Compiled qwen3.8-froggeric-v22.5 renderer (see tests/fixtures/frontend/froggeric_v22_5 for the
+// pinned upstream oracle the byte parity is proven against).
+RenderedChat render_froggeric_v225(const std::vector<ChatMessage>& messages,
+                                   const ChatRenderOptions& options);
 
 class CompiledChatTemplate {
 public:
     [[nodiscard]] static CompiledChatTemplate resolve(std::string_view source);
+    [[nodiscard]] static CompiledChatTemplate froggeric_v225() noexcept;
 
     [[nodiscard]] PromptCapabilities capabilities() const noexcept;
     [[nodiscard]] RenderedChat render(const std::vector<ChatMessage>& messages,

@@ -1,0 +1,89 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "a": 1
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "Error: one"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "a": 2
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "success"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "tool_calls": [
+    {
+     "function": {
+      "name": "f",
+      "arguments": {
+       "a": 3
+      }
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "Error: again"
+  }
+ ],
+ "tools": [
+  {
+   "type": "function",
+   "function": {
+    "name": "get_weather",
+    "description": "Get weather for a city",
+    "parameters": {
+     "type": "object",
+     "properties": {
+      "city": {
+       "type": "string"
+      },
+      "units": {
+       "type": "string",
+       "enum": [
+        "c",
+        "f"
+       ]
+      }
+     },
+     "required": [
+      "city"
+     ]
+    }
+   }
+  }
+ ]
+}

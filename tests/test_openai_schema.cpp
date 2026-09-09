@@ -562,6 +562,105 @@ int test_reasoning_and_extensions() {
     return failures;
 }
 
+int test_froggeric_v225_options() {
+    int failures = 0;
+
+    // v22.5-only kwargs are rejected under the default artifact style and point at the style
+    // that supports them; null values stay neutral like every other unknown option.
+    for (const char* key : {"preserve_reasoning", "auto_disable_thinking_with_tools",
+                            "tool_call_format", "max_tool_arg_chars",
+                            "max_tool_response_chars"}) {
+        Json body                    = base_request();
+        body["chat_template_kwargs"] = Json{{key, true}};
+        const ApiError error         = api_error([&] { (void)parse(body); });
+        failures += check(error.code == "chat_template_option_not_supported" &&
+                              error.message.find("--chat-style froggeric-v22.5") !=
+                                  std::string::npos,
+                          std::string("artifact style rejects ") + key);
+        body["chat_template_kwargs"] = Json{{key, nullptr}};
+        failures += check(parse(body).generation.messages.size() == 1,
+                          std::string("null ") + key + " stays neutral under artifact");
+    }
+
+    RequestLimits v225_limits = limits();
+    v225_limits.chat_style    = ninfer::ChatStyle::FroggericV225;
+    const auto parse_v225     = [&](const Json& body) {
+        return parse_chat_completion_request(body, v225_limits);
+    };
+
+    Json body                    = base_request();
+    body["chat_template_kwargs"] = Json{{"preserve_reasoning", true},
+                                        {"auto_disable_thinking_with_tools", true},
+                                        {"tool_call_format", "json"},
+                                        {"max_tool_arg_chars", 12},
+                                        {"max_tool_response_chars", 34}};
+    const GenerationRequest mapped = parse_v225(body).generation;
+    const bool mapped_ok =
+        mapped.froggeric_v225.preserve_reasoning == true &&
+        mapped.froggeric_v225.auto_disable_thinking_with_tools &&
+        mapped.froggeric_v225.tool_call_format == ninfer::ToolCallFormat::Json &&
+        mapped.froggeric_v225.max_tool_arg_chars == 12 &&
+        mapped.froggeric_v225.max_tool_response_chars == 34;
+    failures += check(mapped_ok, "v22.5 template kwargs map onto the generation request");
+
+    for (const Json& invalid : {Json{{"tool_call_format", "yaml"}},
+                                Json{{"max_tool_arg_chars", -1}},
+                                Json{{"max_tool_arg_chars", 1.5}},
+                                Json{{"max_tool_arg_chars", 4294967296ULL}},
+                                Json{{"preserve_reasoning", "yes"}}}) {
+        Json malformed               = base_request();
+        malformed["chat_template_kwargs"] = invalid;
+        const ApiError error         = api_error([&] { (void)parse_v225(malformed); });
+        failures += check(error.status == 400 && error.param == "chat_template_kwargs",
+                          "v22.5 option type or range validated: " + invalid.dump());
+    }
+
+    body                         = base_request();
+    body["preserve_thinking"]    = false;
+    body["chat_template_kwargs"] = Json{{"preserve_reasoning", true}};
+    failures +=
+        check(api_error([&] { (void)parse_v225(body); }).code == "conflicting_template_option",
+              "preserve_reasoning conflicts with top-level preserve_thinking");
+    body["chat_template_kwargs"] = Json{{"preserve_reasoning", false}};
+    failures += check(parse_v225(body).generation.froggeric_v225.preserve_reasoning == false,
+                      "matching preserve aliases are accepted");
+
+    // Effort aliases: v22.5 maps minimal->low and high/max->xhigh; artifact keeps rejecting.
+    ninfer::PromptCapabilities capabilities;
+    capabilities.enable_thinking                 = true;
+    capabilities.reasoning_effort.low            = true;
+    capabilities.reasoning_effort.medium         = true;
+    capabilities.reasoning_effort.xhigh          = true;
+    capabilities.reasoning_effort.default_effort = ninfer::ReasoningEffort::Medium;
+    ServeOptions v225_server;
+    v225_server.chat_style = ninfer::ChatStyle::FroggericV225;
+    const auto resolve     = [&](const char* effort) {
+        Json request_body                = base_request();
+        request_body["reasoning_effort"] = effort;
+        return resolve_prompt_semantics(
+            parse_chat_completion_request(request_body, v225_limits).generation, v225_server,
+            capabilities);
+    };
+    failures += check(resolve("minimal").reasoning_effort == ninfer::ReasoningEffort::Low &&
+                          resolve("high").reasoning_effort == ninfer::ReasoningEffort::XHigh &&
+                          resolve("max").reasoning_effort == ninfer::ReasoningEffort::XHigh &&
+                          resolve("medium").reasoning_effort == ninfer::ReasoningEffort::Medium,
+                      "v22.5 effort aliases map to low/medium/xhigh");
+    failures += check(!resolve("none").enable_thinking, "effort none disables thinking");
+
+    ServeOptions artifact_server;
+    Json artifact_body                = base_request();
+    artifact_body["reasoning_effort"] = "minimal";
+    const GenerationRequest artifact_request =
+        parse_chat_completion_request(artifact_body, limits()).generation;
+    failures += check(
+        api_error([&] {
+            (void)resolve_prompt_semantics(artifact_request, artifact_server, capabilities);
+        }).code == "reasoning_effort_not_supported",
+        "artifact style still rejects the v22.5 effort aliases");
+    return failures;
+}
+
 int test_stops_and_ranges() {
     int failures                            = 0;
     Json body                               = base_request();
@@ -788,6 +887,7 @@ int main() {
     failures += test_tools();
     failures += test_messages_and_media();
     failures += test_reasoning_and_extensions();
+    failures += test_froggeric_v225_options();
     failures += test_stops_and_ranges();
     failures += test_aggregate_response();
     failures += test_stream_response();

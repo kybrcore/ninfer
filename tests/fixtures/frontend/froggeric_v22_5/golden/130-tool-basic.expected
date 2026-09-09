@@ -1,0 +1,22 @@
+<|im_start|>user
+q<|im_end|>
+<|im_start|>assistant
+<think>
+r0
+</think>
+
+b0
+
+<tool_call>
+<function=get_weather>
+<parameter=city>
+Paris0
+</parameter>
+</function>
+</tool_call><|im_end|>
+<|im_start|>user
+<tool_response>
+temp 20C step 0
+</tool_response><|im_end|>
+<|im_start|>assistant
+<think>

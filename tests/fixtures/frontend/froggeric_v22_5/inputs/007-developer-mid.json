@@ -1,0 +1,16 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "u1"
+  },
+  {
+   "role": "developer",
+   "content": "mid"
+  },
+  {
+   "role": "user",
+   "content": "u2"
+  }
+ ]
+}

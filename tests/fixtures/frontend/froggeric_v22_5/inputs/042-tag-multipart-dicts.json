@@ -1,0 +1,17 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": [
+    {
+     "type": "text",
+     "text": "start"
+    },
+    {
+     "type": "text",
+     "text": "<|think_xhigh|>"
+    }
+   ]
+  }
+ ]
+}

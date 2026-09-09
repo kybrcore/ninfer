@@ -1,4 +1,5 @@
 #include "serve/serve_options.h"
+#include "product/chat_style.h"
 #include "product/speculative_options.h"
 
 #include <cerrno>
@@ -82,6 +83,7 @@ std::string serve_usage_text(const char* argv0) {
            "[--default-max-tokens N] [--default-thinking-budget N] "
            "[--vision] [--no-cuda-graph] [--no-prefix-reuse] "
            "[--lm-head-draft] [--no-thinking] [--preserve-thinking] [--cors] "
+           "[--chat-style artifact|froggeric-v22.5] "
            "[--temperature F] [--top-p F] [--top-k N] [--min-p F] [--presence-penalty F] "
            "[--frequency-penalty F] [--seed N] [--greedy]\n"
            "       [--log-level trace|debug|info|warning|error|critical|off]\n"
@@ -110,6 +112,9 @@ std::string serve_usage_text(const char* argv0) {
            "       --default-thinking-budget caps model-origin thinking for enabled requests; "
            "control tokens count toward the request output limit\n"
            "       --preserve-thinking retains closed-turn assistant reasoning in later prompts\n"
+           "       --chat-style froggeric-v22.5 renders prompts with the compiled Froggeric v22.5\n"
+           "chat-template semantics instead of the artifact's embedded template; the default\n"
+           "artifact value leaves every rendered byte unchanged.\n"
            "       sampler defaults come from the loaded model and resolved thinking mode; "
            "server flags and request fields override individual values.\n"
            "       --greedy forces temperature 0 (exact argmax).\n";
@@ -290,6 +295,8 @@ ServeOptions parse_serve_options(int argc, char** argv) {
             options.enable_thinking = false;
         } else if (arg == "--preserve-thinking") {
             options.preserve_thinking = true;
+        } else if (arg == "--chat-style") {
+            options.chat_style = product::parse_chat_style(require_value("--chat-style"));
         } else if (arg == "--cors") {
             options.enable_cors = true;
         } else if (arg == "--temperature") {

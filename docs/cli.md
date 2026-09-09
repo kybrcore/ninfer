@@ -44,6 +44,12 @@ template's default. An artifact whose template does not expose effort rejects th
 `--no-thinking` for direct-response prompt rendering; it cannot be combined with
 `--reasoning-effort`. `--greedy` selects exact argmax decoding independently.
 
+`--chat-style artifact|froggeric-v22.5` freezes the prompt renderer for the invocation. The
+default `artifact` uses the template embedded in the loaded `.ninfer`; `froggeric-v22.5` uses the
+compiled Froggeric v22.5 semantics. The artifact must still pass its template validation under
+either style. The CLI does not expose the request-level v22.5 template options; use the HTTP API
+for those.
+
 `--thinking-budget N` places a positive upper bound on accepted model-origin tokens while the
 new-turn Qwen thinking block remains open. If the model has not emitted `</think>` at that exact
 boundary, Engine appends [Qwen's canonical early-close guidance](https://github.com/QwenLM/Qwen3/blob/main/docs/source/getting_started/thinking_budget.md)
@@ -221,6 +227,7 @@ The table lists executable defaults. The examples above select FP8 KV and MTP3.
 | `--no-thinking` | disable thinking in prompt rendering | thinking on |
 | `--thinking-budget N` | positive model-origin thinking-token cap; omitted means unlimited | unset |
 | `--reasoning-effort low\|medium\|xhigh` | select an effort exposed by the loaded chat template | template default |
+| `--chat-style artifact\|froggeric-v22.5` | frozen prompt renderer | `artifact` |
 | `--greedy` | exact argmax decoding | off |
 | `--temperature F` | sampling temperature override | registered model/mode default |
 | `--top-p F` | nucleus-threshold override | registered model/mode default |

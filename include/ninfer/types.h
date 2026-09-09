@@ -1,5 +1,7 @@
 #pragma once
 
+#include <ninfer/froggeric_v225.h>
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -148,9 +150,18 @@ struct ContextCostOptions {
     std::filesystem::path preset_path;
 };
 
+// Frozen at Engine start. Artifact renders with the .ninfer's embedded template semantics;
+// FroggericV225 replaces rendering with the compiled qwen3.8-froggeric-v22.5 semantics while
+// still requiring the artifact to pass its usual template validation.
+enum class ChatStyle : std::uint8_t {
+    Artifact     = 0,
+    FroggericV225,
+};
+
 struct EngineOptions {
     std::filesystem::path artifact_path;
     EnginePurpose purpose              = EnginePurpose::Generation;
+    ChatStyle chat_style               = ChatStyle::Artifact;
     int device                         = 0;
     std::uint32_t max_context          = 2048; // Logical ceiling of one request or score window.
     KvCapacityPolicy kv_capacity       = KvCapacityPolicy::explicit_capacity(2048);
@@ -401,6 +412,8 @@ enum class PromptContinuationMode : std::uint8_t {
     ContinueFinalAssistant,
 };
 
+// Tool-call history/instruction serialization for the compiled chat renderers lives in
+// ninfer/froggeric_v225.h together with the rest of the v22.5 request surface.
 struct PromptOptions {
     PromptContinuationMode continuation = PromptContinuationMode::NewAssistantTurn;
     bool enable_thinking                = true;
@@ -408,6 +421,9 @@ struct PromptOptions {
     bool preserve_thinking = false;
     bool add_vision_id     = false;
     std::vector<std::string> tool_jsons;
+    // Froggeric v22.5 request options. The Artifact renderer deliberately ignores them, so
+    // defaults keep every existing prompt byte-identical.
+    FroggericV225Options froggeric_v225;
 };
 
 enum class CacheRetentionHint : std::uint8_t {

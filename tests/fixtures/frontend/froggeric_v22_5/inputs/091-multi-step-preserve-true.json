@@ -1,0 +1,33 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "",
+   "reasoning_content": "r1",
+   "tool_calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "A"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "ok1"
+  },
+  {
+   "role": "assistant",
+   "content": "done",
+   "reasoning_content": "r2"
+  }
+ ],
+ "kwargs": {
+  "preserve_thinking": true
+ }
+}

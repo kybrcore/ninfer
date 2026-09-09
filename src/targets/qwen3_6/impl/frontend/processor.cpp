@@ -1089,6 +1089,7 @@ ProcessedInput Processor::process(std::vector<ChatMessage> messages,
     assign_positions(output, encoded.media_token_runs);
     check_preparation_control(control);
     output.stats = stats;
+    output.generation_starts_in_thinking = rendered.generation_starts_in_thinking;
     return output;
 }
 

@@ -1,4 +1,5 @@
 #include "serve/translate.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_json.h"
 
 #include <nlohmann/json.hpp>
@@ -161,6 +162,13 @@ ResolvedPromptSemantics resolve_prompt_semantics(const GenerationRequest& reques
     case RequestedReasoningEffort::Minimal:
     case RequestedReasoningEffort::High:
     case RequestedReasoningEffort::Max:
+        // froggeric v22.5 maps the API aliases onto its own effort levels; other styles reject
+        // them.
+        if (const std::optional<ninfer::ReasoningEffort> alias =
+                froggeric_v225_effort_alias(server.chat_style, requested)) {
+            result.reasoning_effort = *alias;
+            break;
+        }
         invalid_prompt_option("reasoning effort '" +
                                   std::string(requested_reasoning_effort_name(requested)) +
                                   "' is not supported by the loaded chat template",
@@ -273,6 +281,9 @@ ninfer::PromptInput to_prompt_input(const GenerationRequest& request,
     input.options.reasoning_effort                 = semantics.reasoning_effort;
     input.options.preserve_thinking                = semantics.preserve_thinking;
     input.options.add_vision_id                    = false;
+    // Froggeric v22.5 request options. The artifact renderer ignores them; the parser only
+    // accepts them under the froggeric-v22.5 style.
+    input.options.froggeric_v225 = request.froggeric_v225;
     const std::vector<const ToolDefinition*> tools = effective_tools(request);
     input.options.tool_jsons.reserve(tools.size());
     for (std::size_t index = 0; index < tools.size(); ++index) {

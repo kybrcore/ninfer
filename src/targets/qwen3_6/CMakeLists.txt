@@ -4,8 +4,10 @@ target_sources(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/frontend.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/media_cache.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/processor.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/render_fragment.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/resources.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/tokenizer.cpp
+  ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/tool_call_json_parser.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/frontend/tool_call_parser.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/runtime/prefix_identity.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/state/decoder_state.cpp
@@ -14,6 +16,8 @@ target_sources(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/runtime/visual_scatter.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/vision/bindings.cpp
   ${CMAKE_CURRENT_SOURCE_DIR}/impl/vision/control.cpp)
+
+add_subdirectory(impl/frontend/froggeric_v22_5)
 
 target_include_directories(ninfer_engine PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/export)

@@ -230,6 +230,16 @@ fi::CompiledChatTemplate compile_chat_template(const FrontendResources& resource
     return fi::CompiledChatTemplate::resolve(resources.chat_template_jinja);
 }
 
+// The selected style never skips artifact validation: an inconsistent or unregistered
+// .ninfer must not start with a non-embedded renderer either.
+fi::CompiledChatTemplate compile_chat_template(const FrontendResources& resources,
+                                               ChatStyle chat_style) {
+    const fi::CompiledChatTemplate artifact_template = compile_chat_template(resources);
+    return chat_style == ChatStyle::FroggericV225
+        ? fi::CompiledChatTemplate::froggeric_v225()
+        : artifact_template;
+}
+
 [[noreturn]] void throw_processor_error(const fi::ProcessorError& error) {
     switch (error.kind()) {
     case fi::ProcessorErrorKind::BudgetExceeded:
@@ -329,6 +339,8 @@ fi::ChatRenderOptions render_options(const PromptOptions& options,
                                    .add_vision_id     = options.add_vision_id,
                                    .tool_jsons        = options.tool_jsons};
     rendered.cache_markers.assign(cache_markers.begin(), cache_markers.end());
+    // Froggeric v22.5 request options; the Artifact renderer ignores them.
+    rendered.froggeric_v225 = options.froggeric_v225;
     return rendered;
 }
 
@@ -878,7 +890,7 @@ PreparedContextCache prepare_context_cache(
 class Frontend::Impl {
 public:
     Impl(const FrontendResources& resources, bool registered_checkpoint, FrontendOptions options)
-        : chat_template(compile_chat_template(resources)),
+        : chat_template(compile_chat_template(resources, options.chat_style)),
           tokenizer(std::make_shared<const fi::Tokenizer>(
               fi::TokenizerResources{.tokenizer_json         = resources.tokenizer_json,
                                      .tokenizer_config_json  = resources.tokenizer_config_json,
@@ -1398,7 +1410,9 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
     message_roles.reserve(input.messages.size());
     for (const ChatMessage& message : input.messages) { message_roles.push_back(message.role); }
     const auto tool_call_output =
-        fi::build_tool_call_output_contract(options.tool_jsons, !options.tool_jsons.empty());
+        fi::build_tool_call_output_contract(options.tool_jsons, !options.tool_jsons.empty(),
+                                            options.froggeric_v225.tool_call_format ==
+                                                ninfer::ToolCallFormat::Json);
     const std::optional<std::uint32_t> leading_boundary =
         leading_instruction_boundary(message_roles);
     std::vector<PromptCacheMarker> rendered_markers = cache_hints.markers;
@@ -1464,6 +1478,7 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
             std::move(processed.rewrite_execution_frontiers);
         message_boundaries = std::move(processed.message_boundaries);
         cache_boundaries   = std::move(processed.cache_boundaries);
+        result.generation_starts_in_thinking = processed.generation_starts_in_thinking;
     } else {
         const fi::RenderedChat rendered =
             impl_->chat_template.render(messages, render_options(options, rendered_markers));
@@ -1482,6 +1497,7 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
             std::move(encoded.rewrite_execution_frontiers);
         message_boundaries = std::move(encoded.message_boundaries);
         cache_boundaries   = std::move(encoded.cache_boundaries);
+        result.generation_starts_in_thinking = rendered.generation_starts_in_thinking;
         assign_text_positions(result);
     }
     (void)checked_token_count(result.token_ids.size());
@@ -1491,7 +1507,8 @@ PreparedPrompt Frontend::prepare(PromptInput input, const PreparationControl& co
         cache_boundaries, result.vision_items, engine_tool_marker_index, leading_boundary,
         checked_token_count(result.token_ids.size()));
     result.starts_in_reasoning =
-        options.continuation == PromptContinuationMode::NewAssistantTurn && options.enable_thinking;
+        options.continuation == PromptContinuationMode::NewAssistantTurn &&
+        result.generation_starts_in_thinking;
     result.prepare.seconds = std::chrono::duration<double>(Clock::now() - start).count();
     return PreparedPrompt(std::move(prepared));
 }

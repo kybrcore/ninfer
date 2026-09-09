@@ -1,0 +1,25 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "q"
+  },
+  {
+   "role": "assistant",
+   "content": "b0",
+   "reasoning_content": "r0",
+   "tool_calls": [
+    {
+     "name": "get_weather",
+     "arguments": {
+      "city": "Paris0"
+     }
+    }
+   ]
+  },
+  {
+   "role": "tool",
+   "content": "temp 20C step 0"
+  }
+ ]
+}

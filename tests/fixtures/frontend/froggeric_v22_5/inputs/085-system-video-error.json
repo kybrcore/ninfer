@@ -1,0 +1,17 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": [
+    {
+     "type": "text",
+     "text": "x"
+    },
+    {
+     "type": "video"
+    }
+   ]
+  }
+ ],
+ "expect_error": "System message cannot contain videos."
+}

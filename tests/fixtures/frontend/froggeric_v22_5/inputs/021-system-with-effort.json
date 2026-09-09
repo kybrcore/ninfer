@@ -1,0 +1,15 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": "Be helpful."
+  },
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ],
+ "kwargs": {
+  "reasoning_effort": "xhigh"
+ }
+}

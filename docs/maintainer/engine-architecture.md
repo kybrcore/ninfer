@@ -92,6 +92,9 @@ Frontend 拥有模型家族的输入与输出语义：
 Frontend 可以预览一次模型输出将产生的语义效果，但只有 Engine 完成提交后才能发布该效果。
 Frontend 不拥有等待队列、cache catalog 或物理模型状态。
 
+Chat template 渲染器选择、共享 render-fragment provenance 契约、渲染不变量与 parity 验证见
+[Chat template rendering](frontend-chat-rendering.md)。
+
 ### 2.3 Engine
 
 Engine 是请求控制平面，拥有：
