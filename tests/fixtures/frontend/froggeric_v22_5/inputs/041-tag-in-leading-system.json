@@ -1,0 +1,12 @@
+{
+ "messages": [
+  {
+   "role": "system",
+   "content": "<|think_off|> be brief"
+  },
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ]
+}

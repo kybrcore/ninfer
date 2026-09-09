@@ -1,5 +1,6 @@
 #include "serve/openai_responses.h"
 #include "serve/openai_common.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_validation.h"
 
 #include <algorithm>
@@ -970,7 +971,8 @@ void parse_text(const Json& body) {
     }
 }
 
-void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out) {
+void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out,
+                             ninfer::ChatStyle chat_style) {
     if (body.contains("preserve_thinking") && !body.at("preserve_thinking").is_null()) {
         if (!body.at("preserve_thinking").is_boolean()) {
             bad_request("preserve_thinking must be a boolean or null", "preserve_thinking");
@@ -984,25 +986,20 @@ void parse_preserve_thinking(const Json& body, OpenAIResponsesPromptRequest& out
     if (!kwargs.is_object()) {
         bad_request("chat_template_kwargs must be an object", "chat_template_kwargs");
     }
-    for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
-        if (iterator.key() != "preserve_thinking" && !iterator.value().is_null()) {
-            bad_request("chat_template_kwargs." + iterator.key() + " is not supported",
-                        "chat_template_kwargs", "chat_template_option_not_supported");
+    if (kwargs.contains("preserve_thinking") && !kwargs.at("preserve_thinking").is_null()) {
+        if (!kwargs.at("preserve_thinking").is_boolean()) {
+            bad_request("chat_template_kwargs.preserve_thinking must be a boolean or null",
+                        "chat_template_kwargs");
         }
+        const bool nested = kwargs.at("preserve_thinking").get<bool>();
+        if (out.generation.preserve_thinking && *out.generation.preserve_thinking != nested) {
+            bad_request("conflicting preserve_thinking values", "preserve_thinking",
+                        "conflicting_template_option");
+        }
+        out.generation.preserve_thinking = nested;
     }
-    if (!kwargs.contains("preserve_thinking") || kwargs.at("preserve_thinking").is_null()) {
-        return;
-    }
-    if (!kwargs.at("preserve_thinking").is_boolean()) {
-        bad_request("chat_template_kwargs.preserve_thinking must be a boolean or null",
-                    "chat_template_kwargs");
-    }
-    const bool nested = kwargs.at("preserve_thinking").get<bool>();
-    if (out.generation.preserve_thinking && *out.generation.preserve_thinking != nested) {
-        bad_request("conflicting preserve_thinking values", "preserve_thinking",
-                    "conflicting_template_option");
-    }
-    out.generation.preserve_thinking = nested;
+    out.generation.froggeric_v225 = decode_froggeric_v225_kwargs(
+        chat_style, kwargs, /*accept_enable_thinking=*/false, out.generation.preserve_thinking);
 }
 
 void parse_truncation(const Json& body) {
@@ -1051,7 +1048,7 @@ ParsedPromptFields parse_prompt_fields(const Json& body, const RequestLimits& li
     parse_reasoning(body, out.prompt);
     parse_text(body);
     parse_truncation(body);
-    parse_preserve_thinking(body, out.prompt);
+    parse_preserve_thinking(body, out.prompt, limits.chat_style);
     out.prompt.generation.max_tokens = limits.default_max_tokens;
     return out;
 }

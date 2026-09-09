@@ -1,4 +1,5 @@
 #include "options.h"
+#include "product/chat_style.h"
 #include "product/speculative_options.h"
 
 #include <cerrno>
@@ -87,7 +88,8 @@ std::string usage_text(const char* argv0) {
            "       [--presence-penalty F] [--frequency-penalty F] [--seed N] [--greedy]\n"
            "       [--stop-token-id N]... [--stop <text>]... [--reasoning-stop <text>]...\n"
            "       [--raw-output] [--print-token-ids] [--no-thinking] [--thinking-budget N]\n"
-           "       [--reasoning-effort low|medium|xhigh] [--vision]\n"
+           "       [--reasoning-effort low|medium|xhigh] [--chat-style artifact|froggeric-v22.5]\n"
+           "       [--vision]\n"
            "       [--no-cuda-graph]\n"
            "       [--log-level trace|debug|info|warning|error|critical|off]\n"
            "\n"
@@ -95,6 +97,9 @@ std::string usage_text(const char* argv0) {
            "Structured message content accepts text, image/image_url, and video/video_url parts;\n"
            "media sources may be local paths, HTTP(S) URLs, or base64 data URIs.\n"
            "--vision enables image/video input and loads the fixed Vision GPU allocations.\n"
+           "--chat-style froggeric-v22.5 renders prompts with the compiled Froggeric v22.5\n"
+           "chat-template semantics instead of the artifact's embedded template; the default\n"
+           "artifact value leaves every rendered byte unchanged.\n"
            "--thinking-budget caps model-origin thinking tokens; inserted control tokens count "
            "toward --max-new.\n"
            "--kv-capacity auto leaves " +
@@ -154,6 +159,8 @@ Options parse_options(int argc, char** argv) {
             options.thinking_budget = parse_u32(value(arg), "thinking-budget");
         } else if (arg == "--reasoning-effort") {
             options.reasoning_effort = parse_reasoning_effort(value(arg));
+        } else if (arg == "--chat-style") {
+            options.chat_style = product::parse_chat_style(value(arg));
         } else if (arg == "--vision") {
             options.enable_vision = true;
         } else if (arg == "--no-cuda-graph") {

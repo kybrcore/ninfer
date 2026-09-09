@@ -1,5 +1,6 @@
 #include "serve/openai_chat.h"
 #include "serve/openai_common.h"
+#include "serve/froggeric_v225_request.h"
 #include "serve/request_validation.h"
 
 #include <algorithm>
@@ -797,29 +798,23 @@ void parse_sampling(const Json& body, GenerationRequest& output) {
 struct TemplateOptions {
     std::optional<bool> enable_thinking;
     std::optional<bool> preserve_thinking;
+    // Froggeric v22.5 extensions; only accepted when the engine style is froggeric-v22.5.
+    ninfer::FroggericV225Options froggeric_v225;
 };
 
-TemplateOptions parse_template_options(const Json& body) {
+TemplateOptions parse_template_options(const Json& body, ninfer::ChatStyle chat_style) {
     // Qwen's deployment examples use both top-level aliases and
     // chat_template_kwargs. vLLM/SGLang expose the kwargs form. They are normalized here so the
     // Engine sees one value and conflicting aliases fail before execution.
     TemplateOptions output;
     output.enable_thinking   = get_optional_bool(body, "enable_thinking");
     output.preserve_thinking = get_optional_bool(body, "preserve_thinking");
-
     if (!body.contains("chat_template_kwargs") || body.at("chat_template_kwargs").is_null()) {
         return output;
     }
     const Json& kwargs = body.at("chat_template_kwargs");
     if (!kwargs.is_object()) {
         bad_request("chat_template_kwargs must be an object", "chat_template_kwargs");
-    }
-    for (auto iterator = kwargs.begin(); iterator != kwargs.end(); ++iterator) {
-        if (iterator.key() != "enable_thinking" && iterator.key() != "preserve_thinking" &&
-            !iterator.value().is_null()) {
-            bad_request("chat_template_kwargs." + iterator.key() + " is not supported",
-                        "chat_template_kwargs", "chat_template_option_not_supported");
-        }
     }
     auto merge = [&](const char* key, std::optional<bool>& top_level) {
         const std::optional<bool> nested = get_optional_bool(kwargs, key);
@@ -831,6 +826,8 @@ TemplateOptions parse_template_options(const Json& body) {
     };
     merge("enable_thinking", output.enable_thinking);
     merge("preserve_thinking", output.preserve_thinking);
+    output.froggeric_v225 = decode_froggeric_v225_kwargs(
+        chat_style, kwargs, /*accept_enable_thinking=*/true, output.preserve_thinking);
     return output;
 }
 
@@ -909,9 +906,10 @@ OpenAIChatRequest parse_chat_completion_request(const Json& body, const RequestL
     parse_response_observations(body, output);
     parse_output_limit(body, limits, output);
     parse_reasoning_effort(body, output.generation);
-    const TemplateOptions template_options = parse_template_options(body);
+    const TemplateOptions template_options = parse_template_options(body, limits.chat_style);
     output.generation.enable_thinking      = template_options.enable_thinking;
     output.generation.preserve_thinking    = template_options.preserve_thinking;
+    output.generation.froggeric_v225       = template_options.froggeric_v225;
     apply_openai_prompt_cache_policy(output.generation, cache_policy);
     return output;
 }

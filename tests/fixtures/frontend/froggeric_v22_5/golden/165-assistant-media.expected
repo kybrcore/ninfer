@@ -1,0 +1,12 @@
+<|im_start|>user
+hi<|im_end|>
+<|im_start|>assistant
+<think>
+
+</think>
+
+see Picture 1: <|vision_start|><|image_pad|><|vision_end|><|im_end|>
+<|im_start|>user
+Picture 2: <|vision_start|><|image_pad|><|vision_end|>now<|im_end|>
+<|im_start|>assistant
+<think>

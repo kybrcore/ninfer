@@ -1,5 +1,6 @@
 #include "serve/operational_log.h"
 
+#include "product/chat_style.h"
 #include "product/logging/pretty_format.h"
 #include "product/speculative_options.h"
 
@@ -518,10 +519,10 @@ void OperationalLog::listen_failure(std::string_view host, int port) const {
 }
 
 void OperationalLog::server_ready(std::string_view host, int port, std::string_view model_id,
-                                  bool auth_enabled) const {
-    logger_->info("listening on http://{}:{} | model {} | auth {}",
+                                  bool auth_enabled, ChatStyle chat_style) const {
+    logger_->info("listening on http://{}:{} | model {} | auth {} | chat-style {}",
                   product::format_pretty_text(host), port, product::format_pretty_text(model_id),
-                  auth_enabled ? "bearer" : "disabled");
+                  auth_enabled ? "bearer" : "disabled", product::chat_style_name(chat_style));
 }
 
 void OperationalLog::server_stopped() const { logger_->info("server stopped"); }

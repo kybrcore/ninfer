@@ -45,6 +45,8 @@ private:
 // Server-side context needed while parsing/validating a request.
 struct RequestLimits {
     int default_max_tokens = 8192;
+    // Frozen engine chat style; gates style-specific request option surfaces.
+    ninfer::ChatStyle chat_style = ninfer::ChatStyle::Artifact;
 };
 
 enum class ContentKind {
@@ -183,6 +185,9 @@ struct GenerationRequest {
     std::optional<std::uint32_t> thinking_budget;
     std::optional<RequestedReasoningEffort> reasoning_effort;
     std::optional<bool> preserve_thinking;
+    // Froggeric v22.5 request options. The artifact style rejects them at parse time; the
+    // renderer's template precedence (preserve_reasoning over preserve_thinking) still applies.
+    ninfer::FroggericV225Options froggeric_v225;
     ninfer::PromptContinuationMode continuation = ninfer::PromptContinuationMode::NewAssistantTurn;
     bool allow_engine_automatic_shared_prefixes = true;
     SamplingParams sampling;

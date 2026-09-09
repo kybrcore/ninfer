@@ -149,6 +149,9 @@ struct PreparedPromptData {
     PreparedContextCache context_cache;
     std::shared_ptr<const frontend_internal::ToolCallOutputContract> tool_call_output;
     bool starts_in_reasoning = false;
+    // Mirrors the rendered prompt's final thinking state (template options plus inline control
+    // tags); recorded so callers can audit the split decision alongside the prompt.
+    bool generation_starts_in_thinking = true;
     PrepareStats prepare;
 
     [[nodiscard]] std::span<const std::int32_t> position_axis(int axis) const;

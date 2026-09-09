@@ -1,0 +1,11 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "hi"
+  }
+ ],
+ "kwargs": {
+  "reasoning_effort": "max"
+ }
+}

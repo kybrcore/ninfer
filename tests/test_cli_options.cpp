@@ -104,5 +104,20 @@ int main() {
                   (void)parse({"ninfer-cli", "model.ninfer", "--prompt", "hello", "--top-k", "21"});
               }),
               "CLI accepted top_k beyond the executable candidate domain");
+    failures += check(configured.chat_style == ninfer::ChatStyle::Artifact,
+                      "CLI chat style does not default to artifact");
+    const ninfer::cli::Options v225 =
+        parse({"ninfer-cli", "model.ninfer", "--prompt", "hello", "--chat-style",
+               "froggeric-v22.5"});
+    failures += check(v225.chat_style == ninfer::ChatStyle::FroggericV225,
+                      "CLI --chat-style froggeric-v22.5 was not parsed");
+    failures +=
+        check(ninfer::cli::usage_text("ninfer-cli").find("--chat-style") != std::string::npos,
+              "CLI help omits --chat-style");
+    failures += check(rejects([] {
+                          (void)parse({"ninfer-cli", "model.ninfer", "--prompt", "hello",
+                                       "--chat-style", "froggeric-v22"});
+                      }),
+                      "CLI accepted an unknown chat style");
     return failures == 0 ? 0 : 1;
 }

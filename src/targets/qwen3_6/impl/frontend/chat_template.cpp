@@ -51,110 +51,6 @@ void validate_instruction_message(const ChatMessage& message) {
     }
 }
 
-void append_literal_span(std::vector<ByteSpan>& spans, ByteSpan span) {
-    if (span.begin == span.end) { return; }
-    if (!spans.empty() && spans.back().end == span.begin) {
-        spans.back().end = span.end;
-        return;
-    }
-    if (!spans.empty() && spans.back().end > span.begin) {
-        throw std::logic_error("rendered literal byte spans overlap");
-    }
-    spans.push_back(span);
-}
-
-class RenderBuilder {
-public:
-    void append_template(std::string_view text) { fragment_.text += text; }
-
-    void append_literal(std::string_view text) {
-        const std::size_t begin = fragment_.text.size();
-        fragment_.text += text;
-        append_literal_span(fragment_.literal_spans, ByteSpan{begin, fragment_.text.size()});
-    }
-
-    void append_media_placeholder(std::string_view text, Modality modality,
-                                  std::size_t item_index) {
-        const std::size_t begin = fragment_.text.size();
-        fragment_.text += text;
-        fragment_.media_placeholders.push_back(MediaPlaceholderByteSpec{
-            .bytes      = ByteSpan{begin, fragment_.text.size()},
-            .modality   = modality,
-            .item_index = item_index,
-        });
-    }
-
-    void append(RenderedFragment fragment) {
-        const std::size_t offset = fragment_.text.size();
-        fragment_.text += fragment.text;
-        for (const ByteSpan span : fragment.literal_spans) {
-            append_literal_span(fragment_.literal_spans,
-                                ByteSpan{offset + span.begin, offset + span.end});
-        }
-        for (MediaPlaceholderByteSpec placeholder : fragment.media_placeholders) {
-            placeholder.bytes.begin += offset;
-            placeholder.bytes.end += offset;
-            fragment_.media_placeholders.push_back(placeholder);
-        }
-    }
-
-    [[nodiscard]] std::size_t size() const noexcept { return fragment_.text.size(); }
-
-    [[nodiscard]] RenderedFragment release() && { return std::move(fragment_); }
-
-private:
-    RenderedFragment fragment_;
-};
-
-RenderedFragment literal_fragment(std::string text) {
-    RenderBuilder builder;
-    builder.append_literal(text);
-    return std::move(builder).release();
-}
-
-std::pair<std::size_t, std::size_t> trim_ascii_whitespace_bounds(std::string_view text) {
-    std::size_t begin = 0;
-    while (begin < text.size() && std::isspace(static_cast<unsigned char>(text[begin])) != 0) {
-        ++begin;
-    }
-
-    std::size_t end = text.size();
-    while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0) { --end; }
-    return {begin, end};
-}
-
-RenderedFragment slice_fragment(const RenderedFragment& source, std::size_t begin,
-                                std::size_t end) {
-    if (begin > end || end > source.text.size()) {
-        throw std::logic_error("rendered fragment slice is out of range");
-    }
-    RenderedFragment result;
-    result.text = source.text.substr(begin, end - begin);
-    for (const ByteSpan span : source.literal_spans) {
-        const std::size_t clipped_begin = std::max(span.begin, begin);
-        const std::size_t clipped_end   = std::min(span.end, end);
-        if (clipped_begin < clipped_end) {
-            append_literal_span(result.literal_spans,
-                                ByteSpan{clipped_begin - begin, clipped_end - begin});
-        }
-    }
-    for (MediaPlaceholderByteSpec placeholder : source.media_placeholders) {
-        if (placeholder.bytes.end <= begin || placeholder.bytes.begin >= end) { continue; }
-        if (placeholder.bytes.begin < begin || placeholder.bytes.end > end) {
-            throw std::logic_error("rendered fragment slice intersects a media placeholder");
-        }
-        placeholder.bytes.begin -= begin;
-        placeholder.bytes.end -= begin;
-        result.media_placeholders.push_back(placeholder);
-    }
-    return result;
-}
-
-RenderedFragment trim_ascii_whitespace(const RenderedFragment& fragment) {
-    const auto [begin, end] = trim_ascii_whitespace_bounds(fragment.text);
-    return slice_fragment(fragment, begin, end);
-}
-
 bool starts_with(const std::string& text, std::string_view prefix) {
     return text.size() >= prefix.size() && text.compare(0, prefix.size(), prefix) == 0;
 }
@@ -423,6 +319,10 @@ CompiledChatTemplate CompiledChatTemplate::resolve(std::string_view source) {
                                 sha256_hex(digest) + ")");
 }
 
+CompiledChatTemplate CompiledChatTemplate::froggeric_v225() noexcept {
+    return CompiledChatTemplate(ChatTemplateSemantics::FroggericV225);
+}
+
 PromptCapabilities CompiledChatTemplate::capabilities() const noexcept {
     PromptCapabilities result;
     result.enable_thinking = true;
@@ -432,11 +332,22 @@ PromptCapabilities CompiledChatTemplate::capabilities() const noexcept {
         result.reasoning_effort.xhigh          = true;
         result.reasoning_effort.default_effort = ReasoningEffort::XHigh;
     }
+    if (semantics_ == ChatTemplateSemantics::FroggericV225) {
+        // The v22.5 template defaults its reasoning effort to medium, unlike the artifact's
+        // xhigh default; the style capability surface must not inherit the artifact value.
+        result.reasoning_effort.low            = true;
+        result.reasoning_effort.medium         = true;
+        result.reasoning_effort.xhigh          = true;
+        result.reasoning_effort.default_effort = ReasoningEffort::Medium;
+    }
     return result;
 }
 
 RenderedChat CompiledChatTemplate::render(const std::vector<ChatMessage>& messages,
                                           ChatRenderOptions options) const {
+    if (semantics_ == ChatTemplateSemantics::FroggericV225) {
+        return render_froggeric_v225(messages, options);
+    }
     if (messages.empty()) { throw std::invalid_argument("chat messages must not be empty"); }
 
     const bool continue_final_assistant =
@@ -702,7 +613,8 @@ RenderedChat CompiledChatTemplate::render(const std::vector<ChatMessage>& messag
                         .rewrite_checkpoint           = rewrite_checkpoint,
                         .rewrite_execution_boundaries = std::move(rewrite_execution_boundaries),
                         .message_boundaries           = std::move(message_boundaries),
-                        .cache_boundaries             = std::move(cache_boundaries)};
+                        .cache_boundaries             = std::move(cache_boundaries),
+                        .generation_starts_in_thinking = options.enable_thinking};
 }
 
 } // namespace ninfer::targets::qwen3_6::frontend_internal

@@ -1,0 +1,8 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "<|think_off|>a<|think_on|>b<|think_xhigh|>c<|think_high|>d<|think_ultracode|>e<|think_extreme|>f<|think_max|>g<|think_low|>h<|think_minimal|>i<|think_medium|>j"
+  }
+ ]
+}

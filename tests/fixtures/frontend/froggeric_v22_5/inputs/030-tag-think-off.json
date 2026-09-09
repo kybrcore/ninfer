@@ -1,0 +1,17 @@
+{
+ "messages": [
+  {
+   "role": "user",
+   "content": "do it <|think_off|>"
+  },
+  {
+   "role": "assistant",
+   "content": "B",
+   "reasoning_content": "R"
+  },
+  {
+   "role": "user",
+   "content": "again"
+  }
+ ]
+}
