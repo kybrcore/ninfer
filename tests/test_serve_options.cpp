@@ -248,6 +248,15 @@ int main() {
     failures += check(!semantics.reasoning_effort &&
                           semantics.effective_reasoning_effort == ninfer::ReasoningEffort::XHigh,
                       "omitted reasoning effort did not resolve to the template default");
+    // The resolved default must reach the renderer. Otherwise the served prompt silently falls back
+    // to the renderer's own template default while the logs and the resolved-effort field report the
+    // capabilities default, and the two designs can drift apart unnoticed.
+    {
+        const ninfer::PromptInput resolved_prompt = to_prompt_input(request, semantics, {});
+        failures += check(resolved_prompt.options.reasoning_effort ==
+                              ninfer::ReasoningEffort::XHigh,
+                          "resolved reasoning effort did not reach the renderer options");
+    }
     failures +=
         check(to_request_options(request, defaults, semantics, true).execution.allow_prefix_reuse,
               "resolved read-write cache policy did not reach Engine options");
