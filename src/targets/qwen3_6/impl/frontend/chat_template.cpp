@@ -333,12 +333,16 @@ PromptCapabilities CompiledChatTemplate::capabilities() const noexcept {
         result.reasoning_effort.default_effort = ReasoningEffort::XHigh;
     }
     if (semantics_ == ChatTemplateSemantics::FroggericV225) {
-        // The v22.5 template defaults its reasoning effort to medium, unlike the artifact's
-        // xhigh default; the style capability surface must not inherit the artifact value.
+        // Deliberate product deviation from the pinned template: v22.5 declares medium, but the
+        // service default is aligned with the artifact (reasoning-effort) style's xhigh. Only
+        // requests that omit reasoning_effort observe this value; the compiled renderer keeps the
+        // template's medium value as its parity fallback (froggeric_v22_5/renderer.cpp), so the
+        // byte-parity contract with the pinned Jinja template is untouched. Rationale and blast
+        // radius: docs/maintainer/frontend-chat-rendering.md section 1.
         result.reasoning_effort.low            = true;
         result.reasoning_effort.medium         = true;
         result.reasoning_effort.xhigh          = true;
-        result.reasoning_effort.default_effort = ReasoningEffort::Medium;
+        result.reasoning_effort.default_effort = ReasoningEffort::XHigh;
     }
     return result;
 }

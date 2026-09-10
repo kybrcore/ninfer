@@ -199,6 +199,11 @@ struct RenderState {
 void resolve_render_state(const std::vector<ChatMessage>& messages, RenderState& state) {
     state.has_tools = !state.options.tool_jsons.empty();
     state.thinking  = state.options.enable_thinking;
+    // Template parity fallback: this is the effort the pinned v22.5 Jinja template declares when
+    // `reasoning_effort` is absent. It is not the service default — the product default comes from
+    // CompiledChatTemplate::capabilities() (see chat_template.cpp) and the serve layer always
+    // passes a resolved effort in. Do not "align" this value with the service default: the
+    // byte-parity contract with the pinned template is what the oracle fixtures pin.
     state.effort    = state.options.reasoning_effort.value_or(ReasoningEffort::Medium);
     if (state.options.froggeric_v225.auto_disable_thinking_with_tools && state.has_tools) {
         state.thinking = false;

@@ -21,9 +21,16 @@ flag cannot start an artifact whose template is inconsistent or unknown. An inva
 during option parsing, before any model load, and lists the complete valid set.
 
 `PromptCapabilities` follows the selected style: the artifact renderer reports the effort surface
-implied by its embedded template; `froggeric-v22.5` reports `low`, `medium`, and `xhigh` with a
-`medium` default. The resolved style is published in the startup log line and in the
-`server_start` JSONL record (`engine.chat_style`).
+implied by its embedded template; `froggeric-v22.5` reports `low`, `medium`, and `xhigh` with an
+`xhigh` service default that is deliberately aligned with the artifact (reasoning-effort) style.
+The pinned v22.5 template declares `medium`; the compiled renderer keeps that value only as its
+template-parity fallback, while an omitted request-level `reasoning_effort` resolves to this
+capability value in the serve layer. Keeping the two layers distinct is load-bearing: the renderer
+must stay byte-faithful to the pinned template, and the service default must not silently change
+model behavior — the same prompt bytes at a lower effort tier are a capability change, not a
+renderer fix. The resolved style is published in the startup log line and in the `server_start`
+JSONL record (`engine.chat_style`); every request records both its requested and its resolved
+effort in the request JSONL.
 
 Request-level template options are parsed by the serve layer and carried on `PromptOptions`
 (`preserve_reasoning`, `auto_disable_thinking_with_tools`, `tool_call_format`,

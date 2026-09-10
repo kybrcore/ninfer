@@ -110,7 +110,9 @@ Under `froggeric-v22.5`, Chat Completions and Responses additionally accept thes
 | `max_tool_arg_chars` | non-negative integer / `0` | truncates each XML tool-call argument; `0` disables |
 | `max_tool_response_chars` | non-negative integer / `0` | truncates tool results; JSON-object payloads are exempt; `0` disables |
 
-The style reports `low`, `medium`, and `xhigh` effort with a `medium` default. On top of the
+The style reports `low`, `medium`, and `xhigh` effort with an `xhigh` service default, aligned
+with the artifact style. (The pinned v22.5 template declares `medium`; that value survives only as
+the compiled renderer's parity fallback, not as the omitted-effort default.) On top of the
 existing `none` handling, `minimal` maps to `low` and `high`/`max` map to `xhigh`; the artifact
 style keeps rejecting those aliases. `tool_call_format: "json"` is a non-strict wire format: the
 prompt asks for a JSON object inside `<tool_call>` and the parser validates the wrapper, the
@@ -251,7 +253,9 @@ does not match the model-held endpoint and can reuse only an earlier exact check
 At startup, NInfer resolves prompt capabilities from the exact `frontend/chat_template.jinja`
 resource embedded in the loaded artifact. It does not infer them from the request's `model` field,
 the artifact identity, or a target profile. A recognized effort-capable template exposes `low`,
-`medium`, and `xhigh`; omitting effort uses that template's declared default. An explicit effort
+`medium`, and `xhigh`; omitting effort resolves to the style's service default, which is the
+template's declared default for an artifact renderer and `xhigh` under the `froggeric-v22.5`
+override. An explicit effort
 not exposed by the loaded template returns HTTP 400 with code
 `reasoning_effort_not_supported` before prompt preparation.
 
@@ -279,7 +283,7 @@ not promise that the model will emit nonempty content or a tool call after the m
 For Chat Completions, `reasoning_effort: "none"` disables thinking. `low`, `medium`, and `xhigh`
 select the corresponding template effort when available. The other OpenAI protocol values
 `minimal`, `high`, and `max` are parsed but rejected when the loaded template does not expose them;
-under `froggeric-v22.5` they map to `low` and `xhigh` and the template default is `medium`.
+under `froggeric-v22.5` they map to `low` and `xhigh`, and the omitted-effort default is `xhigh`.
 `enable_thinking` controls the same new-turn thinking switch; a contradictory combination with
 `reasoning_effort` returns `conflicting_template_option`.
 
