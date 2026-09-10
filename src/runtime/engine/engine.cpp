@@ -520,6 +520,20 @@ RuntimeStats Engine::runtime_stats() const {
         impl_->core);
 }
 
+PublishedSnapshot Engine::published_snapshot() const {
+    if (impl_ == nullptr) { throw std::logic_error("Engine is moved from"); }
+    return std::visit(
+        [](const auto& core) -> PublishedSnapshot {
+            using CoreState = std::remove_cvref_t<decltype(core)>;
+            if constexpr (std::is_same_v<CoreState, std::monostate>) {
+                throw std::logic_error("Engine core is unavailable");
+            } else {
+                return core->published_snapshot();
+            }
+        },
+        impl_->core);
+}
+
 bool Engine::is_available() const {
     if (impl_ == nullptr) { return false; }
     return std::visit(

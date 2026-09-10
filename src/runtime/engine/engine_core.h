@@ -234,24 +234,20 @@ public:
 
     [[nodiscard]] MemorySummary memory_summary() const {
         std::scoped_lock lock(execution_mutex_);
-        MemorySummary out                      = instance_.program->memory_summary();
-        const KvCapacityResolution& resolution = instance_.kv_capacity_resolution;
-        out.kv_capacity_mode                   = resolution.mode;
-        out.kv_capacity_page_groups            = resolution.main_page_groups;
-        out.kv_capacity_max_page_groups        = resolution.maximum_main_page_groups;
-        out.minimum_runtime_reservation_bytes  = resolution.minimum_runtime_reservation_bytes;
-        out.kv_capacity_increment_bytes        = resolution.bytes_per_additional_main_page_group;
-        out.runtime_reservation_bytes          = resolution.runtime_reservation_bytes;
-        out.available_after_weights_bytes      = resolution.available_after_weights_bytes;
-        out.available_after_startup_bytes      = resolution.available_after_startup_bytes;
-        out.kv_capacity_headroom_bytes         = resolution.automatic_headroom_bytes;
-        out.planned_slack_bytes                = resolution.planned_slack_bytes;
-        return out;
+        return memory_summary_locked();
     }
 
     [[nodiscard]] RuntimeStats runtime_stats() const {
         std::lock_guard lock(stats_mutex_);
-        return published_stats_;
+        return published_snapshot_.stats;
+    }
+
+    // Counters, gauges, memory, and the publication time from one worker boundary. This is the
+    // only observation path that never touches execution_mutex_, and it cannot mix fields from two
+    // different publications.
+    [[nodiscard]] PublishedSnapshot published_snapshot() const {
+        std::lock_guard lock(stats_mutex_);
+        return published_snapshot_;
     }
 
     [[nodiscard]] bool is_available() const {
@@ -514,6 +510,30 @@ private:
         bool active_ = true;
     };
 
+    // Caller holds execution_mutex_. Separate from memory_summary() so stats publication can reuse
+    // it from inside the execution critical section without re-locking the non-recursive mutex.
+    [[nodiscard]] MemorySummary memory_summary_locked() const {
+        MemorySummary out                      = instance_.program->memory_summary();
+        const KvCapacityResolution& resolution = instance_.kv_capacity_resolution;
+        out.kv_capacity_mode                   = resolution.mode;
+        out.kv_capacity_page_groups            = resolution.main_page_groups;
+        out.kv_capacity_max_page_groups        = resolution.maximum_main_page_groups;
+        out.minimum_runtime_reservation_bytes  = resolution.minimum_runtime_reservation_bytes;
+        out.kv_capacity_increment_bytes        = resolution.bytes_per_additional_main_page_group;
+        out.runtime_reservation_bytes          = resolution.runtime_reservation_bytes;
+        out.available_after_weights_bytes      = resolution.available_after_weights_bytes;
+        out.available_after_startup_bytes      = resolution.available_after_startup_bytes;
+        out.kv_capacity_headroom_bytes         = resolution.automatic_headroom_bytes;
+        out.planned_slack_bytes                = resolution.planned_slack_bytes;
+        return out;
+    }
+
+    [[nodiscard]] static std::uint64_t unix_time_ms() noexcept {
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        return static_cast<std::uint64_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+    }
+
     void publish_runtime_stats() {
         HostPhaseMeasurement measurement = begin_host_phase();
         std::optional<nvtx::ScopedRange> phase_range;
@@ -546,8 +566,15 @@ private:
         phase_range.reset();
         finish_engine_phase(measurement, EngineHostPhase::Maintenance);
         snapshot.host_work = cumulative_stats_.host_work;
+        // Every publication site runs on the worker while it holds execution_mutex_ (worker_loop,
+        // run_prefill_step, run_decode_round, run_control_batch, admission, completion, failure),
+        // so the memory read below belongs to the same boundary as the stats above.
+        PublishedSnapshot published;
+        published.stats                = std::move(snapshot);
+        published.memory               = memory_summary_locked();
+        published.published_at_unix_ms = unix_time_ms();
         std::lock_guard lock(stats_mutex_);
-        published_stats_ = snapshot;
+        published_snapshot_ = std::move(published);
     }
 
     void record_prefix_selection(const RequestPlanSummary& summary) noexcept {
@@ -2049,7 +2076,7 @@ private:
     std::array<std::uint32_t, kMaximumConcurrency> current_decode_lanes_{};
     std::size_t current_decode_lane_count_ = 0;
     RuntimeStats cumulative_stats_;
-    RuntimeStats published_stats_;
+    PublishedSnapshot published_snapshot_;
     bool stopping_ = false;
     bool failed_   = false;
     std::thread worker_;

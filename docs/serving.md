@@ -62,6 +62,7 @@ random values differently.
 | Method and path | Behavior |
 |---|---|
 | `GET /health` | Engine readiness |
+| `GET /stats` | read-only runtime snapshot: scheduler gauges, counters, transfers, pressure, cache reuse, occupancy, memory |
 | `GET /v1/models` | configured OpenAI model alias and effective `max_model_len` |
 | `GET /v1/models/{id}` | lookup of the configured alias and effective `max_model_len` |
 | `POST /v1/chat/completions` | OpenAI-style chat generation |
@@ -76,6 +77,9 @@ random values differently.
 `GET /health` returns HTTP 200 with `{"status":"ok"}` while the Engine can accept work. After an
 Engine-wide failure it returns HTTP 503 with `{"status":"unavailable"}`. Temporary queue
 saturation does not make the Engine unavailable. The endpoint remains unauthenticated.
+
+`GET /stats` returns the same health verdict as a `available` boolean in its body and is
+unauthenticated by the same rule.
 
 Every OpenAI-compatible response carries a unique `x-request-id` header, including streaming and
 error responses. Anthropic endpoints use their separate `request-id` contract.
@@ -1007,6 +1011,42 @@ complete measurement analysis.
 Intervals with context materialization or retention activity are retained even when they contain no
 token execution; only fully idle intervals are omitted. Downstream measurement should prefer the
 raw counters and seconds over rounded stderr rates.
+
+## Stats endpoint
+
+`GET /stats` renders one `ninfer_serve_stats` schema-v1 JSON object and is the pull-based
+counterpart of the 5s throughput records: it exposes the same counters with the same names, plus
+pressure, transfer, and memory fields that the operational log never prints. It carries no prompt,
+generated text, tool argument, request body, or credential.
+
+| Field | Contents |
+|---|---|
+| `timestamp_unix_ms` | time the response was rendered |
+| `available` | the `/health` verdict as a boolean |
+| `server_instance_id` | instance id shared with the structured request log; empty when `--request-log-jsonl` is disabled |
+| `scheduler` | Engine scheduler gauges: `running`, `prefilling`, `decode_ready`, `waiting`, `materializing`, `capture_pending`, `terminal_pending` |
+| `counters` | monotonic process counters: computed-prefill and committed-decode tokens, decode rounds and row-rounds, completed/aborted captures |
+| `http` | `in_flight` request lifetimes and the `max_in_flight` ceiling (`max-concurrency` + `max-pending-requests`) |
+| `kv_transfers`, `state_transfers` | cumulative d2h/h2d/d2d pages or images with bytes and seconds for Main KV, backend KV, and sequence state |
+| `state_operations` | cumulative state moves, forks, and restores |
+| `pressure` | spill pages, partial-tail COW pages, private/shared owner degradation and eviction, dropped checkpoints, pressure searches, search-budget exhaustion, maximal fallback, historical forks |
+| `cache_reuse` | per-path selection counters, reused prompt tokens, last selected frontier |
+| `occupancy` | device/Host state slots, device Main and backend KV pages, Host KV bytes, shared active references |
+| `actual_context_transfer_seconds` | cumulative Host-transfer seconds |
+| `load` | artifact identity, load/upload seconds, staging peak, tensor and resource counts |
+| `memory` | KV storage and capacity ledger, arena capacity/used/peak, Host KV and Host state capacity, the optional Vision workspace layout |
+
+Counters, gauges, and memory are boundary-consistent: the worker captures all three together once
+per execution unit, so a snapshot is at most one unit old (tens of milliseconds during decode, one
+prefill chunk of about 143-633 ms at the default 1024-token chunk) and every field describes the
+same instant. Serving that snapshot touches only the publication lock, so the endpoint answers
+immediately even while a long prefill, a CUDA graph capture, or a materialization holds the
+execution lock; reading the memory ledger live instead was measured at 21.8 s of starvation during
+a 110k-token prefill, which is why the published copy is the only memory source here.
+
+`GET /stats?memory=0` trims the memory block (`memory: null`) for callers that poll only counters
+or forward the payload through a small buffer. It is a payload knob, not a latency knob: the
+snapshot is taken either way.
 
 ## Execution behavior
 
