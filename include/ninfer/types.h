@@ -940,6 +940,16 @@ struct RuntimeStats {
     double actual_context_transfer_seconds             = 0.0;
 };
 
+// One boundary-consistent observation of the Engine: execution counters, current gauges, the
+// memory/arena ledger, and the time the worker published them. Serving reads this single value so
+// no two fields can come from different publications, and so no reader has to touch the execution
+// lock that an in-flight prefill, capture, or materialization holds.
+struct PublishedSnapshot {
+    RuntimeStats stats;
+    MemorySummary memory;
+    std::uint64_t published_at_unix_ms = 0;
+};
+
 enum class ContextCostPresetSource : std::uint8_t {
     GenericDefault,
     CompiledDefault,

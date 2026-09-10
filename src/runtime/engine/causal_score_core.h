@@ -97,6 +97,15 @@ public:
 
     [[nodiscard]] RuntimeStats runtime_stats() const noexcept { return {}; }
 
+    // The causal-scoring core serves evaluation jobs, not the serving endpoints, and publishes no
+    // boundary snapshot: it answers with its current state and no publication time.
+    [[nodiscard]] PublishedSnapshot published_snapshot() const {
+        PublishedSnapshot out;
+        out.stats  = runtime_stats();
+        out.memory = memory_summary();
+        return out;
+    }
+
     [[nodiscard]] bool is_available() const {
         std::lock_guard lock(queue_mutex_);
         return !stopping_;

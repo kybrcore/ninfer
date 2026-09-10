@@ -106,6 +106,10 @@ public:
     [[nodiscard]] LoadSummary load_summary() const;
     [[nodiscard]] MemorySummary memory_summary() const;
     [[nodiscard]] RuntimeStats runtime_stats() const;
+    // Boundary-consistent counters, gauges, memory ledger, and publication time from one worker
+    // boundary. Reads only the publication lock: it never waits behind an in-flight execution unit
+    // and cannot mix fields from two different publications.
+    [[nodiscard]] PublishedSnapshot published_snapshot() const;
     [[nodiscard]] MediaCacheSummary media_cache_summary() const;
     [[nodiscard]] bool is_available() const;
 

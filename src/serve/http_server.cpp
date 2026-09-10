@@ -4,6 +4,7 @@
 #include "serve/http_transport.h"
 #include "serve/openai_common.h"
 #include "serve/request_log.h"
+#include "serve/stats_json.h"
 
 #include <nlohmann/json.hpp>
 
@@ -352,7 +353,8 @@ void HttpServer::register_routes() {
 
     server_.set_pre_routing_handler([this](const httplib::Request& req, httplib::Response& res) {
         ensure_openai_request_id(req, res);
-        if (options_.api_key.empty() || req.path == "/health" || req.method == "OPTIONS") {
+        if (options_.api_key.empty() || req.path == "/health" || req.path == "/stats" ||
+            req.method == "OPTIONS") {
             return httplib::Server::HandlerResponse::Unhandled;
         }
         // Accept both the OpenAI-style bearer token and the Anthropic-style
@@ -431,6 +433,12 @@ void HttpServer::register_routes() {
         res.set_content(nlohmann::json{{"status", available ? "ok" : "unavailable"}}.dump(),
                         "application/json");
     });
+    // Read-only observability snapshot. Always 200 once the service is attached, so a caller can
+    // still see the last published state while the engine is shutting down or failed; "available"
+    // carries the health verdict that /health turns into a status code.
+    server_.Get("/stats", [this](const httplib::Request& req, httplib::Response& res) {
+        handle_stats(req, res);
+    });
     server_.Get("/v1/models", [this](const httplib::Request& req, httplib::Response& res) {
         handle_models(req, res);
     });
@@ -495,6 +503,38 @@ void HttpServer::handle_model(const httplib::Request& req, httplib::Response& re
     }
     res.set_content(make_model_object(public_model_id_, unix_time_now(), options_.max_context),
                     "application/json");
+}
+
+void HttpServer::handle_stats(const httplib::Request& req, httplib::Response& res) const {
+    if (service_ == nullptr) {
+        // Unreachable in practice: the socket only accepts after attach(), but a defensive 503
+        // keeps the handler total.
+        ApiError error;
+        error.status  = 503;
+        error.type    = "api_error";
+        error.code    = "server_not_ready";
+        error.message = "engine is not attached";
+        write_openai_error(res, error);
+        return;
+    }
+    const auto now = std::chrono::system_clock::now().time_since_epoch();
+    StatsSnapshot snapshot;
+    snapshot.timestamp_unix_ms = static_cast<std::uint64_t>(
+        std::chrono::duration_cast<std::chrono::milliseconds>(now).count());
+    // One read of one boundary: counters, gauges, and memory all describe the same instant, and
+    // the read never waits on the execution lock.
+    const ninfer::PublishedSnapshot published  = service_->published_snapshot();
+    snapshot.stats_published_at_unix_ms        = published.published_at_unix_ms;
+    snapshot.server_instance_id                = request_jsonl_.server_instance_id();
+    snapshot.available                         = service_->is_available();
+    snapshot.stats                             = published.stats;
+    // ?memory=0 drops the memory block for callers that only want the counters. It is a payload
+    // knob, not a latency knob: the snapshot is already taken either way.
+    if (req.get_param_value("memory") != "0") { snapshot.memory = published.memory; }
+    snapshot.load          = service_->load_summary();
+    snapshot.in_flight     = service_->in_flight_requests();
+    snapshot.max_in_flight = service_->max_in_flight_requests();
+    res.set_content(format_stats_json(snapshot), "application/json");
 }
 
 bool HttpServer::bind() { return server_.bind_to_port(options_.host, options_.port); }
