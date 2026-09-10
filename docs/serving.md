@@ -255,7 +255,7 @@ resource embedded in the loaded artifact. It does not infer them from the reques
 the artifact identity, or a target profile. A recognized effort-capable template exposes `low`,
 `medium`, and `xhigh`; omitting effort resolves to the style's service default, which is the
 template's declared default for an artifact renderer and `xhigh` under the `froggeric-v22.5`
-override. An explicit effort
+override, and the resolved value is what the renderer receives. An explicit effort
 not exposed by the loaded template returns HTTP 400 with code
 `reasoning_effort_not_supported` before prompt preparation.
 

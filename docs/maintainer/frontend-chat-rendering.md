@@ -25,9 +25,12 @@ implied by its embedded template; `froggeric-v22.5` reports `low`, `medium`, and
 `xhigh` service default that is deliberately aligned with the artifact (reasoning-effort) style.
 The pinned v22.5 template declares `medium`; the compiled renderer keeps that value only as its
 template-parity fallback, while an omitted request-level `reasoning_effort` resolves to this
-capability value in the serve layer. Keeping the two layers distinct is load-bearing: the renderer
-must stay byte-faithful to the pinned template, and the service default must not silently change
-model behavior — the same prompt bytes at a lower effort tier are a capability change, not a
+capability value in the serve layer and is forwarded to the renderer as an **explicit** option.
+That forwarding is what makes the service default real: without it the renderer silently keeps its
+own template fallback while the logs and the resolved-effort field report the capability value,
+and the two designs drift apart with no signal. Keeping the layers distinct is load-bearing: the
+renderer must stay byte-faithful to the pinned template, and the service default must not silently
+change model behavior — the same prompt bytes at a lower effort tier are a capability change, not a
 renderer fix. The resolved style is published in the startup log line and in the `server_start`
 JSONL record (`engine.chat_style`); every request records both its requested and its resolved
 effort in the request JSONL.
