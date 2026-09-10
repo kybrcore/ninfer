@@ -399,12 +399,31 @@ int test_v225_capabilities() {
     const fj::CompiledChatTemplate renderer        = fj::CompiledChatTemplate::froggeric_v225();
     const ninfer::PromptCapabilities capabilities = renderer.capabilities();
     int failures                                   = 0;
+    // Service policy: the froggeric style aligns its omitted-effort default with the artifact
+    // (reasoning-effort) style instead of the pinned template's medium (chat_template.cpp).
     failures += check(capabilities.enable_thinking && capabilities.reasoning_effort.low &&
                           capabilities.reasoning_effort.medium &&
                           capabilities.reasoning_effort.xhigh &&
                           capabilities.reasoning_effort.default_effort ==
-                              ninfer::ReasoningEffort::Medium,
-                      "v22.5 capabilities report low/medium/xhigh with a medium default");
+                              ninfer::ReasoningEffort::XHigh,
+                      "v22.5 capabilities report low/medium/xhigh with an xhigh service default");
+
+    // Template parity: the compiled renderer keeps the pinned template's medium fallback, so an
+    // omitted effort renders exactly like an explicit medium and differs from xhigh. Keep both
+    // halves: the first pins parity with the pinned Jinja template, the second proves the renderer
+    // fallback and the service default are distinct values rather than one value under two names.
+    std::vector<fj::ChatMessage> messages;
+    messages.push_back(text_message(ninfer::ChatRole::User, "hi"));
+    const fj::ChatRenderOptions implicit_options;
+    fj::ChatRenderOptions medium_options;
+    medium_options.reasoning_effort = ninfer::ReasoningEffort::Medium;
+    fj::ChatRenderOptions xhigh_options;
+    xhigh_options.reasoning_effort = ninfer::ReasoningEffort::XHigh;
+    const std::string implicit_text = renderer.render(messages, implicit_options).text;
+    failures += check(implicit_text == renderer.render(messages, medium_options).text,
+                      "omitted effort keeps the v22.5 template medium fallback");
+    failures += check(implicit_text != renderer.render(messages, xhigh_options).text,
+                      "the v22.5 template fallback is distinct from the xhigh service default");
     return failures;
 }
 
