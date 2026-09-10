@@ -278,7 +278,12 @@ ninfer::PromptInput to_prompt_input(const GenerationRequest& request,
 
     input.options.continuation                     = request.continuation;
     input.options.enable_thinking                  = semantics.enable_thinking;
-    input.options.reasoning_effort                 = semantics.reasoning_effort;
+    // Forward the *effective* effort, not the requested one: an omitted request field resolves to
+    // the loaded template's service default (capabilities()), and that resolution has to reach the
+    // renderer or the logged/API-resolved effort and the served prompt disagree silently. The
+    // value is nullopt whenever the template exposes no effort surface or thinking is off, and the
+    // ThinkingToggle renderer rejects an explicit effort, so forwarding stays correct there.
+    input.options.reasoning_effort                 = semantics.effective_reasoning_effort;
     input.options.preserve_thinking                = semantics.preserve_thinking;
     input.options.add_vision_id                    = false;
     // Froggeric v22.5 request options. The artifact renderer ignores them; the parser only
