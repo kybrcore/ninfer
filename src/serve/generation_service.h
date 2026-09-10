@@ -108,6 +108,18 @@ public:
 
     [[nodiscard]] ninfer::RuntimeStats runtime_stats() const { return engine_->runtime_stats(); }
 
+    // Counters, gauges, memory, and publication time from one worker boundary. Never touches the
+    // execution lock, so it cannot wait behind a prefill chunk, a graph capture, or a
+    // materialization.
+    [[nodiscard]] ninfer::PublishedSnapshot published_snapshot() const {
+        return engine_->published_snapshot();
+    }
+
+    // HTTP-layer admission depth: request lifetimes currently held, and the configured ceiling
+    // (max_concurrency + max_pending_requests).
+    [[nodiscard]] std::size_t in_flight_requests() const;
+    [[nodiscard]] std::size_t max_in_flight_requests() const;
+
     [[nodiscard]] bool is_available() const { return engine_->is_available(); }
 
     [[nodiscard]] ninfer::MediaCacheSummary media_cache_summary() const {
