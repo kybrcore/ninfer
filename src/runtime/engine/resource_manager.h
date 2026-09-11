@@ -37,10 +37,6 @@ struct RetentionObservation {
     RetentionClass retention_class   = RetentionClass::RecentPrivate;
     std::uint64_t selected_hit_count = 0;
     std::uint64_t last_hit_epoch     = 0;
-    // Set once an incoming prompt carried a shortlist key AT this checkpoint's frontier and the
-    // digests disagreed: the lineage has diverged here, so no future prompt on it can reuse this
-    // checkpoint.  Positive evidence of unreachability, not the absence of demand.
-    bool diverged = false;
 };
 
 struct PolicyObservationKey {
@@ -327,13 +323,6 @@ public:
                 if (!valid_prefix_index_entry(index)) { continue; }
                 const std::optional<PrefixShortlistKey> incoming =
                     base.prefix_shortlist_key(index.key.frontier);
-                if (incoming && *incoming != index.key && !index.shared &&
-                    index.slot < catalog_count_) {
-                    if (RetentionObservation* observation = find_observation(
-                            catalog_[index.slot].observations, index.checkpoint)) {
-                        observation->diverged = true;
-                    }
-                }
                 if (!incoming || *incoming != index.key) { continue; }
 
                 if (!index.shared) {
@@ -589,16 +578,8 @@ public:
 
         std::optional<SelectedCapture> selected;
         std::vector<PlanningOwnerRecord> capture_owner_records;
-        // A private-only publication has no shared slot to displace, so it never reached the
-        // pressure planner and was skipped outright once the physical State pools filled.  The
-        // catalogs are deliberately oversubscribed against those pools, so every publication
-        // route needs a reclamation option or the first conversation owns the cache forever.
-        const bool private_only_pressure = !candidate.publishes_shared &&
-                                           private_baseline.publishes_private &&
-                                           !private_baseline.physically_feasible;
-        if (candidate.publishes_shared || private_only_pressure) {
+        if (candidate.publishes_shared) {
             const bool pressure_evidence =
-                private_only_pressure ||
                 has_shared_candidate_evidence(candidate.shared_evidence,
                                               SharedCandidateEvidence::ExplicitBoundary) ||
                 has_shared_candidate_evidence(candidate.shared_evidence,
@@ -607,15 +588,7 @@ public:
 
             std::vector<CaptureScenario> scenarios;
             scenarios.reserve(static_cast<std::size_t>(shared_catalog_count_) + 1U);
-            if (private_only_pressure) {
-                scenarios.push_back(CaptureScenario{
-                    .assessment       = private_baseline,
-                    .publication_slot = kInvalidCatalogSlot,
-                    .stable_ordinal   = 0,
-                });
-            }
-            for (std::uint32_t slot = 0;
-                 candidate.publishes_shared && slot < shared_catalog_count_; ++slot) {
+            for (std::uint32_t slot = 0; slot < shared_catalog_count_; ++slot) {
                 if (shared_catalog_[slot].state != SharedCatalogState::Vacant) { continue; }
                 scenarios.push_back(CaptureScenario{
                     .assessment       = candidate,
@@ -624,7 +597,7 @@ public:
                 });
                 break;
             }
-            if (pressure_evidence && candidate.publishes_shared) {
+            if (pressure_evidence) {
                 for (std::uint32_t slot = 0; slot < shared_catalog_count_; ++slot) {
                     SharedCatalogEntry& entry = shared_catalog_[slot];
                     if (entry.state != SharedCatalogState::Catalogued || !entry.handle ||
@@ -756,7 +729,7 @@ public:
                     }
                     return found->id;
                 };
-                if (pressure_evidence || !scenario.assessment.physically_feasible) {
+                if (pressure_evidence) {
                     private_owners.reserve(catalog_count_);
                     private_owner_ids.reserve(catalog_count_);
                     shared_owners.reserve(shared_catalog_count_);
@@ -797,8 +770,7 @@ public:
                             : std::optional<PlanningOwnerId>(owner_id_for(
                                   LogicalOwnerKind::SharedPrefix, scenario.publication_slot)),
                     .candidate_demand_mask =
-                        committed_demand_mask_for(scenario.assessment.shortlist_key) |
-                        rolling_inherited_demand(lane),
+                        committed_demand_mask_for(scenario.assessment.shortlist_key),
                     .candidate_rebuild_ns =
                         cost_model_.prefill_ns(scenario.assessment.protected_rebuild_work),
                     .private_baseline_immediate_ns = price_context_transfer_requirements(
@@ -826,33 +798,6 @@ public:
         }
 
         if (!selected) {
-            // Portfolio arbitration cannot resolve a private-only publication whose shortlist key
-            // has no committed demand: the candidate's public value is zero while a resident's is
-            // not, so the transition can never clear a threshold that starts at the baseline it
-            // reduces.  A resident whose conversation continued would have been CONSUMED into the
-            // active lane rather than left contending, so one still catalogued here with no active
-            // edge belongs to a finished conversation.  Reclaim the oldest such resident, and only
-            // after normal arbitration has already declined to produce a plan.
-            if (private_only_pressure && private_baseline.publishes_private &&
-                !private_baseline.physically_feasible &&
-                reclaim_stale_private_resident(program, lane)) {
-                private_baseline =
-                    program.inspect_capture(offer, nullptr, nullptr, std::nullopt, false);
-                private_replacement.reset();
-                if (!private_baseline.private_replacement_candidates.empty()) {
-                    private_replacement =
-                        *std::min_element(private_baseline.private_replacement_candidates.begin(),
-                                          private_baseline.private_replacement_candidates.end(),
-                                          [](CheckpointRef lhs, CheckpointRef rhs) {
-                                              return std::tuple{lhs.kind, lhs.frontier,
-                                                                lhs.ordinal} <
-                                                     std::tuple{rhs.kind, rhs.frontier,
-                                                                rhs.ordinal};
-                                          });
-                    private_baseline = program.inspect_capture(offer, nullptr, nullptr,
-                                                               private_replacement, false);
-                }
-            }
             if (!private_baseline.publishes_private || !private_baseline.physically_feasible) {
                 program.skip_capture(std::move(offer));
                 return ActiveCaptureReserveResult::Skipped;
@@ -870,15 +815,10 @@ public:
             return ActiveCaptureReserveResult::Reserved;
         }
 
-        if (selected->scenario.publication_slot == kInvalidCatalogSlot &&
-            !selected->plan.pressure) {
-            program.skip_capture(std::move(offer));
-            return ActiveCaptureReserveResult::Skipped;
-        }
         ActiveCaptureRecord record{
             .lane                 = lane,
             .publishes_private    = selected->scenario.assessment.publishes_private,
-            .publishes_shared     = selected->scenario.publication_slot != kInvalidCatalogSlot,
+            .publishes_shared     = true,
             .publication_slot     = selected->scenario.publication_slot,
             .replacement_id       = selected->scenario.replacement_id,
             .replacement_revision = selected->scenario.replacement_revision,
@@ -943,27 +883,25 @@ public:
                 });
             }
         }
-        if (record.publishes_shared) {
-            if (!selected->plan.pressure) {
-                throw std::logic_error("selected shared capture has no pressure plan");
+        if (!selected->plan.pressure) {
+            throw std::logic_error("selected shared capture has no pressure plan");
+        }
+        if (record.publication_slot >= shared_catalog_count_) {
+            throw std::logic_error("selected shared publication slot is invalid");
+        }
+        const SharedCatalogEntry& publication = shared_catalog_[record.publication_slot];
+        if (record.replacement_id == 0) {
+            if (publication.state != SharedCatalogState::Vacant || publication.id != 0 ||
+                publication.handle || publication.transaction_pins != 0 ||
+                shared_active_edge_count(record.publication_slot) != 0) {
+                throw std::logic_error("selected vacant shared publication slot changed");
             }
-            if (record.publication_slot >= shared_catalog_count_) {
-                throw std::logic_error("selected shared publication slot is invalid");
-            }
-            const SharedCatalogEntry& publication = shared_catalog_[record.publication_slot];
-            if (record.replacement_id == 0) {
-                if (publication.state != SharedCatalogState::Vacant || publication.id != 0 ||
-                    publication.handle || publication.transaction_pins != 0 ||
-                    shared_active_edge_count(record.publication_slot) != 0) {
-                    throw std::logic_error("selected vacant shared publication slot changed");
-                }
-            } else if (publication.state != SharedCatalogState::Catalogued ||
-                       !publication.handle || publication.id != record.replacement_id ||
-                       publication.revision != record.replacement_revision ||
-                       publication.transaction_pins != 0 ||
-                       shared_active_edge_count(record.publication_slot) != 0) {
-                throw std::logic_error("selected shared replacement changed before reservation");
-            }
+        } else if (publication.state != SharedCatalogState::Catalogued || !publication.handle ||
+                   publication.id != record.replacement_id ||
+                   publication.revision != record.replacement_revision ||
+                   publication.transaction_pins != 0 ||
+                   shared_active_edge_count(record.publication_slot) != 0) {
+            throw std::logic_error("selected shared replacement changed before reservation");
         }
 
         transaction_.template emplace<ActiveCaptureRecord>(std::move(record));
@@ -972,7 +910,7 @@ public:
         const ContextTransactionReserveStatus reserved =
             program.reserve_active_capture_with_pressure(
                 std::move(offer), nullptr, selected->scenario.replacement, private_replacement,
-                open.publishes_shared, std::move(*selected->plan.pressure), cancellation);
+                true, std::move(*selected->plan.pressure), cancellation);
         if (reserved == ContextTransactionReserveStatus::Aborted) {
             rollback_logical_active_capture(open);
             transaction_.template emplace<std::monostate>();
@@ -1039,9 +977,8 @@ public:
         assign_continuation_summary(publication.summary, result.summary);
         publication.handle.emplace(std::move(*result.continuation));
         result.continuation.reset();
-        publication.session           = active.session;
-        publication.retention         = active.retention;
-        publication.publication_order = active.publication_order;
+        publication.session   = active.session;
+        publication.retention = active.retention;
         migrate_observations(publication, result.summary, active.retention);
         advance_revision(publication.revision);
         if (publication.session && active.update_session_index) {
@@ -1176,30 +1113,6 @@ public:
                                            : static_cast<std::uint32_t>(shared_references);
     }
 
-    // Opt in to rolling retention. See ContextCacheOptions::rolling_retention.
-    void enable_rolling_retention() noexcept { rolling_retention_ = true; }
-
-    // Rolling retention: the demand a capture inherits from the residents the current request
-    // has proven it extends. A request's committed demand record lists every resident key it
-    // matched exactly at that resident's frontier; the capture at the prompt's end frontier is
-    // therefore a strict extension of each. In a monotonic conversation every past request that
-    // wanted an ancestor wants its descendant next, so the ancestor's demand is the descendant's.
-    // A capture that matched nothing inherits nothing and is valued exactly as before.
-    [[nodiscard]] std::uint32_t rolling_inherited_demand(LaneId lane) const noexcept {
-        if (!rolling_retention_ || lane.value >= lane_count_) { return 0; }
-        const ActiveEntry& active  = active_[lane.value];
-        const ReuseDomainId domain = reuse_domain(active.session, active.publication_order);
-        std::uint32_t mask         = 0;
-        for (const PrefixDemandRecord& demand : demand_window_) {
-            if (demand.domain != domain) { continue; }
-            for (const PrefixShortlistKey& key : demand.exact_resident_keys) {
-                mask |= committed_demand_mask_for(key);
-            }
-        }
-        return mask;
-    }
-
-
     [[nodiscard]] CatalogState catalog_state(std::uint32_t slot) const noexcept {
         return slot < catalog_count_ ? catalog_[slot].state : CatalogState::Vacant;
     }
@@ -1246,11 +1159,6 @@ private:
         std::optional<CacheSessionKey> session;
         std::vector<CheckpointObservation> observations;
         RetentionClass retention = RetentionClass::RecentPrivate;
-        // The publication order of the request that catalogued this entry.  Ordering domain for
-        // stale reclamation: last_hit_epoch cannot serve, because a reused checkpoint is consumed
-        // into the active lane and the surviving resident is always its freshly published
-        // successor, whose hit history is empty by construction.
-        std::uint64_t publication_order = 0;
     };
 
     struct SharedCatalogEntry {
@@ -1650,8 +1558,7 @@ private:
         entry.handle.reset();
         entry.session.reset();
         entry.observations.clear();
-        entry.retention         = RetentionClass::RecentPrivate;
-        entry.publication_order = 0;
+        entry.retention = RetentionClass::RecentPrivate;
         advance_revision(entry.revision);
     }
 
@@ -1718,41 +1625,6 @@ private:
         const SharedCatalogEntry& entry = shared_catalog_[index.slot];
         return entry.state == SharedCatalogState::Catalogued && entry.handle &&
                entry.id == index.owner_id && entry.revision == index.revision;
-    }
-
-    // Releases the oldest catalogued private continuation that no live request can reach.
-    // Ordering is by publication_order (oldest first), tie-broken by slot for determinism.
-    [[nodiscard]] bool reclaim_stale_private_resident(Program& program, LaneId lane) {
-        const ActiveEntry& active = active_[lane.value];
-        std::uint32_t victim      = kInvalidCatalogSlot;
-        std::uint64_t oldest      = std::numeric_limits<std::uint64_t>::max();
-        for (std::uint32_t slot = 0; slot < catalog_count_; ++slot) {
-            const CatalogEntry& entry = catalog_[slot];
-            if (entry.state != CatalogState::Catalogued || !entry.handle ||
-                private_has_active_edge(slot)) {
-                continue;
-            }
-            // Never the source this request materialized from.  A Retain source already holds an
-            // active edge; this states the intent for both source modes rather than relying on it.
-            if (active.retained_private_source && active.retained_private_source->slot == slot) {
-                continue;
-            }
-            if (entry.publication_order < oldest) {
-                oldest = entry.publication_order;
-                victim = slot;
-            }
-        }
-        if (victim == kInvalidCatalogSlot) { return false; }
-        CatalogEntry& entry = catalog_[victim];
-        if (program.release_continuation(std::move(*entry.handle)).status !=
-            ConsumeStatus::Consumed) {
-            return false;
-        }
-        erase_session_if_owner(entry.id);
-        clear_catalog_entry(entry);
-        rebuild_prefix_index();
-        saturating_increment(context_stats_.pressure_private_owners_evicted);
-        return true;
     }
 
     [[nodiscard]] std::uint64_t newest_hit_epoch(const CatalogEntry& entry) const noexcept {
@@ -2038,7 +1910,6 @@ private:
                         .baseline_recovery_ns = price_checkpoint_recovery_work(
                             cost_model_,
                             program.checkpoint_recovery_work(*entry.handle, checkpoint.ref)),
-                        .unreachable = observation->diverged,
                     });
                 };
                 if (entry.summary.endpoint) { append_checkpoint(*entry.summary.endpoint); }
@@ -2430,9 +2301,7 @@ private:
         for (const OwnerClaim& claim : record.shared_claims) {
             shared_catalog_[claim.capability.slot].state = SharedCatalogState::Claimed;
         }
-        if (record.publishes_shared) {
-            shared_catalog_[record.publication_slot].state = SharedCatalogState::ReservedCapture;
-        }
+        shared_catalog_[record.publication_slot].state = SharedCatalogState::ReservedCapture;
     }
 
     void rollback_logical_active_capture(const ActiveCaptureRecord& record) noexcept {
@@ -2442,11 +2311,9 @@ private:
         for (const OwnerClaim& claim : record.shared_claims) {
             shared_catalog_[claim.capability.slot].state = SharedCatalogState::Catalogued;
         }
-        if (record.publishes_shared) {
-            shared_catalog_[record.publication_slot].state = record.replacement_id == 0
-                                                                 ? SharedCatalogState::Vacant
-                                                                 : SharedCatalogState::Catalogued;
-        }
+        shared_catalog_[record.publication_slot].state = record.replacement_id == 0
+                                                             ? SharedCatalogState::Vacant
+                                                             : SharedCatalogState::Catalogued;
     }
 
     void observe_selected_hit(const MaterializationRecord& record) noexcept {
@@ -3496,7 +3363,6 @@ private:
     std::uint32_t catalog_count_        = 0;
     std::uint32_t shared_catalog_count_ = 0;
     bool cache_enabled_                 = true;
-    bool rolling_retention_             = false;
     std::array<LogicalLaneState, kMaximumConcurrency> lanes_{};
     std::vector<CatalogEntry> catalog_;
     std::vector<SharedCatalogEntry> shared_catalog_;

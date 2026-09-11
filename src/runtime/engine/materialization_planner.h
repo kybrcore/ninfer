@@ -27,8 +27,6 @@ struct MaterializationCheckpointPolicy {
     std::uint32_t demand_mask          = 0;
     std::uint64_t rebuild_ns           = 0;
     std::uint64_t baseline_recovery_ns = 0;
-    // Proven unreachable by a key mismatch at its own frontier; retaining it saves nothing.
-    bool unreachable = false;
 };
 
 struct MaterializationOwnerPolicy {
@@ -1172,7 +1170,6 @@ private:
                 .rebuild_ns           = policy.rebuild_ns,
                 .baseline_recovery_ns = policy.baseline_recovery_ns,
                 .target_recovery_ns   = target_recovery,
-                .unreachable          = policy.unreachable,
             });
             if (target_recovery > policy.baseline_recovery_ns) {
                 portfolio_degraded = true;

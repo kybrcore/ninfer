@@ -57,7 +57,6 @@ EngineOptions normalize_engine_options(EngineOptions options) {
         cache.max_private_continuations         = concurrency;
         cache.max_shared_prefixes               = 0;
         cache.max_long_anchors_per_continuation = 0;
-        cache.rolling_retention                 = false;
         return options;
     }
 
