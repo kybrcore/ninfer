@@ -2,6 +2,8 @@
 
 #include "ninfer/types.h"
 
+#include <charconv>
+#include <cmath>
 #include <stdexcept>
 #include <string>
 #include <string_view>
