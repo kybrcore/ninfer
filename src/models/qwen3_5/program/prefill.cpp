@@ -936,10 +936,6 @@ runtime::ExecutionTiming ProgramImpl::resolve_pending_raw(
 
             commit_sequence_kv(sequence, sequence.text_kv_valid, backend_kv_valid(sequence));
             trim_sequence_kv(sequence, sequence.text_kv_valid, backend_kv_valid(sequence));
-            if (committed < pending.produced) {
-                invalidate_sequence_side_rows(sequence, sequence.text_kv_valid,
-                                              pending.base_E + pending.produced);
-            }
             if (terminal[row]) {
                 request.lifecycle = Lifecycle::Finishable;
             } else {
