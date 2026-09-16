@@ -1,7 +1,7 @@
 # Qwen3.8-27B nvfp4qat: maintained recipe and reproduction
 
 `feat/qwen3.8-nvfp4qat` preserves this profile lineage as a scoped conversion
-patch on upstream `6cc95cc5` plus `feat/qwen3.8-profile-base`. Full and QAT are
+patch over `feat/qwen3.8-profile-base`. Full and QAT are
 siblings; neither depends on the other, DFlash execution, Windows, HQ, 1M context,
 or kernel-performance changes. The shared prerequisite owns only vocabulary/optional
 allocation and physical parent grouping. There is no new runtime identity or registry.
@@ -33,7 +33,7 @@ Use local snapshots, not glob/latest discovery or automatic downloads:
 | `z-lab/Qwen3.8-27B-DFlash2` | `50307d4c4cde6860d4eee73e2547cd786fe8e8a4` | optional BF16 W8 companion |
 
 These revisions identify historical inputs, not byte-identical v3 output requirements.
-Keep the saved full calibration input with its checkpoint/corpus provenance.
+QAT imports its stored divisors; it requires no Full calibration file.
 
 ## Reproduce and run
 
@@ -73,3 +73,21 @@ check allocation/policies and exact packed-word/divisor imports and BF16 decode.
 They verify 256 NVFP4 parents, 48 BF16 control groups and Q8 vocabulary.
 These CPU tests do not establish full-checkpoint conversion, GPU inference quality
 or performance qualification.
+
+## Prepare a v3 release
+
+Choose a new output path; do not overwrite the published v2 artifact. Conversion
+emits a v3 `.ninfer` file and its report. The explicit `--components` selection
+is part of the release contract: optional weights are not added implicitly.
+
+For all optional components, extend the conversion command above with
+`--components text,mtp,vision,dflash2 --source dflash2="$DFLASH2"`. Set `DFLASH2`
+to the local BF16 companion checkpoint. This selects W8 companion weights, not
+the historical release's NVFP4 module. Add `--proposal` only when including an
+optimized proposal head in the release; enable its runtime option only then.
+
+Before publishing, record the new file's size and SHA-256 and retain the conversion
+report. Check plain Text and MTP with the commands above; check Vision and DFlash2
+on the same artifact if those components are included. Existing v2 benchmark and
+quality tables do not qualify the new component allocation or container. Update
+the model card with measured release facts rather than reusing the v2 hash.

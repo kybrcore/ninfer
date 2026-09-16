@@ -80,6 +80,31 @@ This model card is the version-controlled source for [cometkim/Qwen3.8-27B-nvfp4
 
 The repository contains a QAT-sourced NVFP4 weight profile of [Qwen/Qwen3.8-27B](https://huggingface.co/Qwen/Qwen3.8-27B) in the native [NInfer](https://github.com/Neroued/ninfer) `.ninfer` artifact format, with the [z-lab/Qwen3.8-27B-DFlash2](https://huggingface.co/z-lab/Qwen3.8-27B-DFlash2) block-diffusion speculative drafter embedded in the same image. The artifact is intended only for NInfer engines with [cometkim/ninfer](https://github.com/cometkim/ninfer) patches; it is not a Transformers checkpoint, Safetensors distribution, or GGUF file.
 
+## v3 conversion
+
+The maintained recipe is `tools/convert/recipes/qwen3_8_27b_nvfp4qat.py`.
+It uses the native logical-parameter converter, not a new runtime identity or
+weights registry. The recipe owns its profile-specific source and precision choices;
+the shared base supplies only common allocation and physical grouping.
+
+The Text allocation preserves 256 imported NVFP4 Text parents, 48 BF16-decoded GDN control groups and Q8
+vocabulary. Packed weights and stored weight/input divisors come from the QAT
+source. No local activation calibration or Full-profile encoder is required.
+
+Use the [conversion and reproduction instructions](reproduction.md) to generate a
+new artifact. Components are explicit: `text,mtp,vision,dflash2` includes a W8
+DFlash2 companion from the BF16 draft checkpoint. This differs from the released
+v2 artifact's 34-object NVFP4 companion. Text/MTP conversion needs no NVFP4
+DFlash2 runtime extension. The converter's `--proposal` option adds the separate
+optimized proposal head when selected.
+
+The release table and evaluation results below continue to identify the published
+v2 artifact. They are not the size, checksum or qualification of a new v3 file.
+For a Hugging Face v3 release, record the generated artifact's actual filename,
+byte size and SHA-256, retain the conversion report and explicit component/source
+selection, and qualify Text/MTP plus every optional component being advertised.
+No new v3 release checksum or quality result is asserted by this recipe update.
+
 ## Weight profile
 
 This is a fourth weight profile for the existing `qwen3_8_27b` target — a peer of the official `groupwise-int` and `nvfp4` profiles and of the fork's fuller-requant [`nvfp4full`](https://huggingface.co/cometkim/Qwen3.8-27B-nvfp4full-NInfer) profile.
