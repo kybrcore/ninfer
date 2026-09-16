@@ -766,9 +766,7 @@ void validate_target_options(const execution::Parameters& parameters, DeviceCont
     }
     if (options.rope_scaling_factor > 1.0F) {
         if (options.max_context > native_positions &&
-            static_cast<std::uint64_t>(native_positions) *
-                    static_cast<std::uint64_t>(options.rope_scaling_factor) <
-                options.max_context) {
+            scaled_ceiling(native_positions) < options.max_context) {
             throw std::invalid_argument(
                 "max_context exceeds the YaRN-scaled position capacity");
         }
