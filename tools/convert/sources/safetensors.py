@@ -9,6 +9,7 @@ from math import prod
 import os
 from pathlib import Path
 import signal
+import sys
 import struct
 import threading
 
@@ -54,6 +55,11 @@ def _pread_with_retry(fd: int, count: int, offset: int, *, timeout: float = 120.
         try:
             return os.pread(fd, count, offset)
         except _StalledRead:
+            print(
+                f"[convert] stalled source read, retrying: fd={fd} offset={offset} count={count}",
+                file=sys.stderr,
+                flush=True,
+            )
             pass
         finally:
             signal.setitimer(signal.ITIMER_REAL, 0)
