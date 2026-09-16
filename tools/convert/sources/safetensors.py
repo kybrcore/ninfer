@@ -8,7 +8,9 @@ import json
 from math import prod
 import os
 from pathlib import Path
+import signal
 import struct
+import threading
 
 import torch
 
@@ -26,6 +28,35 @@ _DTYPES = {
     "U8": (torch.uint8, 1),
     "F8_E4M3": (torch.float8_e4m3fn, 1),
 }
+
+
+class _StalledRead(Exception):
+    """A bounded source read exceeded its time budget (e.g. a lost NAS request)."""
+
+
+def _raise_stalled(signum, frame):
+    raise _StalledRead()
+
+
+def _pread_with_retry(fd: int, count: int, offset: int, *, timeout: float = 120.0) -> bytes:
+    """os.pread with a stall timer.
+
+    The read is bounded and purely positional, hence idempotent, which is what makes a retry
+    safe: network-storage reads occasionally wait forever on a lost page request, and reissuing
+    the identical bounded read turns that wedge into a recoverable error. Signals only interrupt
+    the main thread, so non-main callers fall back to the plain read.
+    """
+    if threading.current_thread() is not threading.main_thread():
+        return os.pread(fd, count, offset)
+    signal.signal(signal.SIGALRM, _raise_stalled)
+    while True:
+        signal.setitimer(signal.ITIMER_REAL, timeout)
+        try:
+            return os.pread(fd, count, offset)
+        except _StalledRead:
+            pass
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,7 +177,7 @@ class SafetensorsSource:
         count = (end - begin) * word_bytes
         fd = self._file(info.file)
         offset = info.offset + begin * word_bytes
-        raw = os.pread(fd, count, offset)
+        raw = _pread_with_retry(fd, count, offset)
         if len(raw) != count:
             raise ValueError(f"{name}: short source read")
         self.bytes_read += count
