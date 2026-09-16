@@ -76,12 +76,12 @@ StatsSnapshot make_snapshot(bool with_memory) {
     stats.shared_active_references        = 0;
     stats.actual_context_transfer_seconds = 0.103376;
 
-    snapshot.load.model_id       = "qwen3.8-27b";
-    snapshot.load.target         = "qwen3_8_27b";
-    snapshot.load.weights_id     = "nvfp4";
-    snapshot.load.load_seconds   = 13.8347;
-    snapshot.load.tensor_count   = 1060;
-    snapshot.load.resource_count = 6;
+    snapshot.load.architecture          = "qwen3_8_27b";
+    snapshot.load.model_name            = "qwen3.8-27b";
+    snapshot.load.weight_formats        = {"nvfp4"};
+    snapshot.load.load_seconds          = 13.8347;
+    snapshot.load.device_object_count   = 1060;
+    snapshot.load.host_object_count     = 6;
     snapshot.in_flight           = 3;
     snapshot.max_in_flight       = 11;
     return snapshot;
@@ -140,7 +140,7 @@ int main() {
                       "memory duplicates an occupancy gauge");
     failures += check(stats.at("memory").at("vision_workspace").is_null(),
                       "disabled vision must render null");
-    failures += check(stats.at("load").at("model_id") == "qwen3.8-27b", "load identity missing");
+    failures += check(stats.at("load").at("model_name") == "qwen3.8-27b", "load identity missing");
 
     // ?memory=0 trims the payload: every other field survives and the memory block is explicit.
     const Json cheap = Json::parse(format_stats_json(make_snapshot(false)));
