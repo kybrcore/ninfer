@@ -753,6 +753,15 @@ curl http://127.0.0.1:8080/v1/models \
 
 The table lists executable defaults. The startup example selects a long-context FP8/MTP3 profile.
 
+The 27B runtime accepts up to 1,048,576 logical tokens on this line: the causal decode kernels
+read the block table directly (no fixed-size page staging) and the visible-keys ceiling is 4x
+native. These are execution envelopes, not checkpoint training lengths or guarantees of
+long-context answer quality. Use `--rope-scaling yarn:2`, `yarn:3`, or `yarn:4` for the
+524288/786432/1048576 presets. Scaling is fixed at startup; query-side temperature is applied
+consistently during prefill, eager decode and CUDA Graph capture. The DFlash draft keeps its
+checkpoint-linear rope, so its proposals degrade gracefully beyond the native window while the
+target remains the output authority.
+
 | Option | Meaning | Default |
 |---|---|---:|
 | `--host H` | listen address | `127.0.0.1` |
@@ -777,6 +786,7 @@ The table lists executable defaults. The startup example selects a long-context 
 | `--response-store-max-records N` | maximum locally retained Responses objects | `1024` |
 | `--response-store-max-mib N` | total local Response envelope/Item/context budget | `256` |
 | `--kv-dtype bf16\|int8\|fp8\|nvfp4\|k8v4` | KV-cache storage | `bf16` |
+| `--rope-scaling none\|yarn:F[,t=<c>][,bf=<n>][,bs=<n>]` | startup RoPE scaling and optional temperature/ramp parameters | `none` |
 | `--spec mtp\|dflash\|dflash2` | speculative backend | off |
 | `--draft-tokens N` | MTP `1..5`; DFlash/DFlash2 `1..15` | unset |
 | `--lm-head-draft` | optimized proposal head | off |

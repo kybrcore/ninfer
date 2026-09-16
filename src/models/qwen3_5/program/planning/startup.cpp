@@ -737,13 +737,44 @@ void validate_target_options(const execution::Parameters& parameters, DeviceCont
         throw std::invalid_argument(
             "loaded components do not match the requested execution options");
     }
+    // The DFlash draft keeps its checkpoint-linear rope (the rope API's RopeSide::Key route),
+    // but the v2 quasar-yarn deployment served dflash2 above the native window with the target
+    // as the output authority, so the draft position ceiling scales with the factor instead of
+    // blocking extended contexts. The MTP draft shares the text rope table and is scaled with it.
+    const double yarn_factor = options.rope_scaling_factor > 1.0F
+                                   ? static_cast<double>(options.rope_scaling_factor)
+                                   : 1.0;
+    const auto scaled_ceiling = [yarn_factor](std::uint32_t native) {
+        return static_cast<std::uint64_t>(static_cast<double>(native) * yarn_factor);
+    };
     if (parameters.draft &&
-        options.max_context > parameters.model.config().draft->max_position_embeddings) {
-        throw std::invalid_argument("max_context exceeds the selected draft position capacity");
+        options.max_context >
+            scaled_ceiling(parameters.model.config().draft->max_position_embeddings)) {
+        throw std::invalid_argument("max_context exceeds the selected draft position capacity"
+                                    " (raise --rope-scaling to extend it)");
     }
-    if (options.max_context == 0 ||
-        options.max_context > parameters.model.config().text.max_position_embeddings) {
-        throw std::invalid_argument("max_context exceeds the configured position capacity");
+    if (options.max_context == 0) {
+        throw std::invalid_argument("max_context must be nonzero");
+    }
+    const std::uint32_t native_positions = parameters.model.config().text.max_position_embeddings;
+    // The execution envelope ceiling is reachable on every KV profile on this line: the causal
+    // decode kernels read block_table directly (no fixed-size page staging) and the visible-keys
+    // ceiling is 4x native, so the rope-scaling capacity check below is the binding constraint.
+    constexpr std::uint32_t kMaximumExecutionEnvelope = 1048576;
+    if (options.max_context > kMaximumExecutionEnvelope) {
+        throw std::invalid_argument("max_context exceeds the execution envelope ceiling");
+    }
+    if (options.rope_scaling_factor > 1.0F) {
+        if (options.max_context > native_positions &&
+            static_cast<std::uint64_t>(native_positions) *
+                    static_cast<std::uint64_t>(options.rope_scaling_factor) <
+                options.max_context) {
+            throw std::invalid_argument(
+                "max_context exceeds the YaRN-scaled position capacity");
+        }
+    } else if (options.max_context > native_positions) {
+        throw std::invalid_argument(
+            "max_context exceeds the checkpoint's trained positions without rope scaling");
     }
     if (options.prefill_chunk == 0 || options.prefill_chunk % kPrefillChunkAlignment != 0) {
         throw std::invalid_argument("prefill_chunk must be a nonzero multiple of 128");
@@ -786,7 +817,9 @@ void validate_target_options(const execution::Parameters& parameters, DeviceCont
     case SpeculativeBackend::Mtp:
         if (options.speculative.draft_tokens == 0 ||
             options.speculative.draft_tokens > kMaximumMtpDraftTokens) {
-            throw std::invalid_argument("MTP draft window must be in [1,5]");
+            throw std::invalid_argument(
+                "MTP draft window must be in [1," +
+                std::to_string(kMaximumMtpDraftTokens) + "]");
         }
         break;
     case SpeculativeBackend::DFlash:
@@ -829,6 +862,10 @@ std::unique_ptr<SequencePlanImpl> build_sequence_candidate(const SequencePlannin
     impl->device              = inputs.device;
     impl->context_cache       = inputs.context_cache;
     impl->kv_storage          = inputs.kv_storage;
+    impl->rope_scaling_factor    = inputs.rope_scaling_factor;
+    impl->rope_scaling_temperature = inputs.rope_scaling_temperature;
+    impl->rope_scaling_beta_fast  = inputs.rope_scaling_beta_fast;
+    impl->rope_scaling_beta_slow  = inputs.rope_scaling_beta_slow;
     impl->persistent          = persistent_layout(*impl);
     impl->workspace           = build_workspace_plan(*impl);
     if (impl->use_cuda_graph) {
@@ -893,6 +930,10 @@ make_sequence_planner_impl(const execution::Parameters& parameters, DeviceContex
         .draft_window        = options.speculative.draft_tokens,
         .speculative_backend = options.speculative.backend,
         .kv_storage          = options.kv_cache,
+        .rope_scaling_factor          = options.rope_scaling_factor,
+        .rope_scaling_temperature     = options.rope_scaling_temperature,
+        .rope_scaling_beta_fast       = options.rope_scaling_beta_fast,
+        .rope_scaling_beta_slow       = options.rope_scaling_beta_slow,
         .proposal_head       = options.speculative.proposal_head,
         .features            = models::load_options(options),
         .use_cuda_graph      = options.use_cuda_graph,
