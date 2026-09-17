@@ -10,7 +10,7 @@ from tools.convert.model import Model, Parameter
 from tools.convert.recipe import Recipe
 from tools.convert.methods import cast_direct, grouped_absmax, import_encoded
 from tools.convert.sources.logical import LogicalSource
-from tools.convert.recipes import qwen3_8_27b_nvfp4qat as qat
+from tools.convert.recipes import qwen3_8_27b_quasar as qat
 from tools.convert.qwen3_5 import _Builder
 
 
