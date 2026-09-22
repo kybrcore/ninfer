@@ -1,4 +1,14 @@
-# Qwen3.8-27B nvfp4qat: maintained recipe and reproduction
+# Qwen3.8-27B nvfp4qat: recipe lineage and reproduction
+
+> **Scope: lineage of the removed recipe pair.** The pair these instructions
+> describe — `tools/convert/recipes/qwen3_8_27b_nvfp4qat.py` + `qwen3_8_profile.py`
+> and the `tests.convert.test_nvfp4qat_profile` spec test — was removed in
+> `61773f73` after the self-contained `tools/convert/recipes/qwen3_8_27b_quasar.py`
+> proved byte-equivalent. Reproduce with that recipe (spec test:
+> `tests.convert.test_quasar_profile`), or with the frozen kit in the HF release
+> [kybrcore/Qwen3.8-27B-QUASAR-NVFP4-NInfer](https://huggingface.co/kybrcore/Qwen3.8-27B-QUASAR-NVFP4-NInfer)
+> (`conversion/reproduce.sh`, which runs against an upstream `Neroued/ninfer`
+> checkout). The commands below are kept as the pair's historical record.
 
 `feat/qwen3.8-nvfp4qat` preserves this profile lineage as a scoped conversion
 patch over `feat/qwen3.8-profile-base`. Full and QAT are

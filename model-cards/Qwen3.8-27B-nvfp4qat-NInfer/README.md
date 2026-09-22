@@ -82,10 +82,14 @@ The repository contains a QAT-sourced NVFP4 weight profile of [Qwen/Qwen3.8-27B]
 
 ## v3 conversion
 
-The maintained recipe is `tools/convert/recipes/qwen3_8_27b_nvfp4qat.py`.
-It uses the native logical-parameter converter, not a new runtime identity or
-weights registry. The recipe owns its profile-specific source and precision choices;
-the shared base supplies only common allocation and physical grouping.
+The maintained recipe is `tools/convert/recipes/qwen3_8_27b_quasar.py`. It is the
+self-contained successor of the `qwen3_8_27b_nvfp4qat.py` + `qwen3_8_profile.py`
+pair this card originally documented: byte-equivalence between the two was proven
+(same assignment order, same formats, byte-identical output outside the random
+metadata header), and `61773f73` replaced the pair with it, keeping the originals in
+git history. It uses the native logical-parameter converter, not a new runtime
+identity or weights registry, and owns its profile-specific source and precision
+choices.
 
 The Text allocation preserves 256 imported NVFP4 Text parents, 48 BF16-decoded GDN control groups and Q8
 vocabulary. Packed weights and stored weight/input divisors come from the QAT
