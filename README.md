@@ -293,10 +293,3 @@ The Qwen3.8-27B NVFP4 artifact also uses the fixed mixed FP8/NVFP4 weights from
 [unsloth/Qwen3.8-27B-NVFP4](https://huggingface.co/unsloth/Qwen3.8-27B-NVFP4). These source
 repositories are distributed under Apache-2.0. Vendored dependencies retain their own license files
 under `third_party/`.
-
-<!-- ninfer:features:start -->
-| feat branch | stacked on | status | squashed on dev as |
-|---|---|---|---|
-| [`feat/qwen3.8-profile-base`](docs/features/qwen3.8-profile-base.md) | `master` | Minimal shared vocabulary, optional-component allocation and parent grouping for sibling full/QAT recipes. | — |
-| [`feat/qwen3.8-nvfp4qat`](model-cards/Qwen3.8-27B-nvfp4qat-NInfer/README.md) | `feat/qwen3.8-profile-base` | Independent QAT packed-weight import recipe, BF16 control decode and reproduction commands. | — |
-<!-- ninfer:features:end -->
